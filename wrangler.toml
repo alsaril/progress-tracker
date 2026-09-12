@@ -2,10 +2,7 @@ name = "practice-tracker"
 main = "src/index.ts"
 compatibility_date = "2026-08-28"
 
-# Replace with your own numeric Telegram user id (from @userinfobot).
-# This is the allowlist of one from design section 7.
 [vars]
-ALLOWED_USER_ID = "REPLACE_ME"
 TIMEZONE = "Europe/Lisbon"
 # The all-time PNG (design section 6.2) is OFF by default because rasterising
 # it costs ~20 ms CPU and the free plan allows 10 ms per invocation. /stats
@@ -16,12 +13,18 @@ CHART_IMAGE = "off"
 [[d1_databases]]
 binding = "DB"
 database_name = "practice-tracker"
-# Filled in by `wrangler d1 create practice-tracker`. Local dev ignores it.
-database_id = "REPLACE_ME"
+# Created 2026-09-12 in region WEUR. Local dev ignores this id.
+database_id = "67a18644-bd1c-45c6-87f1-91da65e54093"
 
 # Secrets, set with `wrangler secret put <NAME>` (never in this file):
-#   BOT_TOKEN       - from @BotFather
-#   WEBHOOK_SECRET  - random string, also passed to setWebhook
+#   BOT_TOKEN        - from @BotFather
+#   WEBHOOK_SECRET   - random string, also passed to setWebhook
+#   ALLOWED_USER_ID  - your numeric Telegram user id, from @userinfobot
+#
+# ALLOWED_USER_ID is a secret rather than a [vars] entry only because this
+# repository is public: it is an identifier, not a credential, but there is no
+# reason to publish it. Workers resolves secrets and vars through the same
+# `env`, so the code is identical either way.
 
 # The vendored font ships as a byte array (see vendor/PROVENANCE.txt).
 # resvg cannot render <text> without font data.

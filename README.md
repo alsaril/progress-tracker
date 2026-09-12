@@ -26,13 +26,15 @@ npm test          # 67 unit tests, no network or account needed
 npm run typecheck
 ```
 
-Then, once per deployment:
+Then, once per deployment. **Run every `wrangler` command from the project
+directory** — it finds `wrangler.toml` by walking up from the working
+directory, and outside the project it fails with "Required Worker name
+missing".
 
 1. **Create the bot** with [@BotFather](https://t.me/BotFather) and keep the token.
 2. **Find your numeric user id** with [@userinfobot](https://t.me/userinfobot).
-3. **Fill in `wrangler.toml`**: `ALLOWED_USER_ID` is that number.
-4. **Edit `scripts/seed.sql`** with your real objectives and weights.
-5. **Create the database** and note the id it prints into `wrangler.toml`:
+3. **Edit `scripts/seed.sql`** with your real objectives and weights.
+5. **Create the database** and put the id it prints into `wrangler.toml`:
    ```bash
    npx wrangler login
    npx wrangler d1 create practice-tracker
@@ -42,7 +44,10 @@ Then, once per deployment:
    ```bash
    npx wrangler secret put BOT_TOKEN
    npx wrangler secret put WEBHOOK_SECRET
+   npx wrangler secret put ALLOWED_USER_ID   # your numeric Telegram user id
    ```
+   On the first of these, wrangler will offer to create a Worker called
+   `practice-tracker` because none exists yet. Say yes.
 7. **Deploy and register the webhook:**
    ```bash
    npm run deploy
@@ -117,9 +122,28 @@ Use the *Edit Cloudflare Workers* template rather than a Global API Key: the
 template is scoped to Workers, and a Global Key would let CI do anything to your
 whole Cloudflare account.
 
-`BOT_TOKEN` and `WEBHOOK_SECRET` are **not** repository secrets — they live on
+`BOT_TOKEN`, `WEBHOOK_SECRET` and `ALLOWED_USER_ID` are **not** repository secrets — they live on
 the Worker (`wrangler secret put`) and persist across deploys, so CI never needs
 to see them.
+
+### If `--file` fails against `--remote`
+
+`wrangler d1 execute --remote --file=...` uploads the file through a separate
+endpoint, which some sandboxed or proxied networks block ("fetch failed" with a
+connectivity warning, while `--command` against the same database works fine).
+If you hit that, apply the statements inline instead:
+
+```bash
+python3 - <<'EOF'
+import subprocess
+sql = open("migrations/0001_init.sql").read()
+body = "\n".join(l for l in sql.splitlines() if not l.strip().startswith("--"))
+for s in (x.strip() for x in body.split(";")):
+    if s:
+        subprocess.run(["npx","wrangler","d1","execute","practice-tracker",
+                        "--remote","--command",s+";","-y"], check=True)
+EOF
+```
 
 ## The weekly window is not reconfigurable
 
