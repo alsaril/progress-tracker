@@ -1,0 +1,8 @@
+DejaVuSans-subset.ttf
+  derived from: DejaVu Fonts 2.37 release, ttf/DejaVuSans.ttf
+  source:       https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.zip
+  upstream sha256: 7da195a74c55bef988d0d48f9508bd5d849425c1770dba5d7bfc6ce9ed848954  (DejaVuSans.ttf)
+  subset to:    Latin-1 + Latin Extended-A + · → – — … −
+  subset with:  fontTools 4.25.0 --layout-features='' --no-hinting --desubroutinize
+  subset sha256: 83ec27d8ea476820728f73041f09b6f699b5cb99cdf0193556a78dc837a53557
+  license:      see DejaVuSans-LICENSE.txt (Bitstream Vera / Arev, redistribution permitted)

@@ -1,0 +1,7 @@
+# Local development only. Copy to .dev.vars (which is gitignored).
+# These are dummy values: the bot token is never used because
+# TELEGRAM_API_BASE points at the stub that scripts/e2e.py stands up.
+BOT_TOKEN=123456:local-dev-not-a-real-token
+WEBHOOK_SECRET=local-dev-secret
+ALLOWED_USER_ID=42
+TELEGRAM_API_BASE=http://127.0.0.1:8799

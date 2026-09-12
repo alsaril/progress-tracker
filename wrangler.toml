@@ -1,0 +1,31 @@
+name = "practice-tracker"
+main = "src/index.ts"
+compatibility_date = "2026-08-28"
+
+# Replace with your own numeric Telegram user id (from @userinfobot).
+# This is the allowlist of one from design section 7.
+[vars]
+ALLOWED_USER_ID = "REPLACE_ME"
+TIMEZONE = "Europe/Lisbon"
+# The all-time PNG (design section 6.2) is OFF by default because rasterising
+# it costs ~20 ms CPU and the free plan allows 10 ms per invocation. /stats
+# sends its text views either way. Set to "on" only on a paid plan, where the
+# default budget is 30 s. Measured figures are in README.md.
+CHART_IMAGE = "off"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "practice-tracker"
+# Filled in by `wrangler d1 create practice-tracker`. Local dev ignores it.
+database_id = "REPLACE_ME"
+
+# Secrets, set with `wrangler secret put <NAME>` (never in this file):
+#   BOT_TOKEN       - from @BotFather
+#   WEBHOOK_SECRET  - random string, also passed to setWebhook
+
+# The vendored font ships as a byte array (see vendor/PROVENANCE.txt).
+# resvg cannot render <text> without font data.
+[[rules]]
+type = "Data"
+globs = ["**/*.ttf"]
+fallthrough = true

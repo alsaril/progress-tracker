@@ -1,0 +1,107 @@
+name: CI
+
+# Test every push and pull request; deploy only from main, and only if the
+# tests passed.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+# Actions are pinned to commit SHAs, not tags: a tag can be moved to point at
+# new code, a SHA cannot. Only first-party actions/* are used — no third-party
+# action gets to run in a job that holds the Cloudflare token.
+# To update one: look up the SHA for the tag you want and change it here.
+
+permissions:
+  contents: read
+
+concurrency:
+  # A newer push to the same branch makes an in-flight run redundant, except on
+  # main where a half-finished deploy should not be cancelled.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    name: typecheck, unit, end-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+
+      # `npm ci` honours the committed lockfile exactly. --ignore-scripts works
+      # because workerd ships as a platform-specific optional dependency rather
+      # than a postinstall download.
+      - name: Install
+        run: npm ci --ignore-scripts
+
+      - name: Audit
+        run: npm audit --audit-level=high
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      # The end-to-end harness needs a running Worker with a seeded local D1.
+      # .dev.vars carries only local dummy values, so it is generated here
+      # rather than stored as a secret.
+      - name: Prepare local environment
+        run: |
+          cp .dev.vars.example .dev.vars
+          npm run db:local
+          npm run seed:local
+
+      - name: Start Worker
+        run: |
+          npx wrangler dev --port 8787 --local > /tmp/wrangler-dev.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null "http://127.0.0.1:8787/" \
+              || [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/)" = "404" ]; then
+              echo "worker ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "worker did not become ready:"; cat /tmp/wrangler-dev.log; exit 1
+
+      - name: End-to-end
+        run: npm run e2e
+
+      - name: Worker log on failure
+        if: failure()
+        run: cat /tmp/wrangler-dev.log || true
+
+  deploy:
+    name: deploy to Cloudflare
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # Set required reviewers on this environment in repo settings if you ever
+    # want a manual gate before production.
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install
+        run: npm ci --ignore-scripts
+
+      # Deploys the Worker only. Database migrations are deliberately NOT run
+      # here: an automatic schema change against the single source of truth is
+      # not something a push to main should be able to do. Run migrations by
+      # hand with `npm run db:remote`.
+      - name: Deploy
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

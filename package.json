@@ -1,0 +1,27 @@
+{
+  "name": "practice-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "e2e": "python3 scripts/e2e.py",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 execute practice-tracker --local --file=migrations/0001_init.sql",
+    "seed:local": "wrangler d1 execute practice-tracker --local --file=scripts/seed.sql",
+    "db:remote": "wrangler d1 execute practice-tracker --remote --file=migrations/0001_init.sql",
+    "seed:remote": "wrangler d1 execute practice-tracker --remote --file=scripts/seed.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260911.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11",
+    "wrangler": "4.131.1"
+  },
+  "dependencies": {
+    "@resvg/resvg-wasm": "2.6.2"
+  }
+}
