@@ -98,7 +98,10 @@ curl -X POST http://127.0.0.1:8787/webhook \
 5. `npm run e2e` (27 checks against a real `wrangler dev` with a seeded local D1)
 
 Then, only on `main` and only if all of that passed, it deploys with
-`npx wrangler deploy`.
+`npx wrangler deploy` — or skips the deploy with a **warning** if
+`CLOUDFLARE_API_TOKEN` is not set, so an unconfigured repository does not look
+like a broken one. The warning is deliberate: a silently skipped deploy would be
+indistinguishable from a successful one if the token were ever revoked.
 
 Two deliberate choices:
 
