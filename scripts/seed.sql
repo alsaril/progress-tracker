@@ -1,8 +1,11 @@
--- The objective tree. EDIT THIS FILE before first use.
+-- A SAMPLE tree, for local development and CI only.
 --
--- Placeholder contents are the music example from the design document. Since
--- /add is not in v1, this file is how the tree gets set: edit it, then re-run
---   npm run seed:local     (or seed:remote)
+-- Your real objectives do not belong here: build them from the bot with /add,
+-- so they live in the database rather than in this (public) repository. This
+-- file exists so `npm run seed:local` gives the end-to-end harness a known tree
+-- to assert against, and so a fresh clone has something to click.
+--
+-- Contents are the music example from the design document.
 --
 -- Weights are RELATIVE and need not sum to anything (design section 2.4).
 -- Shares are derived on read by renormalising over the active set, so 3/4/2/1

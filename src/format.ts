@@ -215,3 +215,62 @@ export function formatRecorded(
     `<i>week of ${escapeHtml(formatWeekLabel(bounds))}</i>`,
   ].join("\n");
 }
+
+/**
+ * The whole tree with weights, derived shares and totals — the view you want
+ * while setting the tree up, and the answer to "what did I call that?".
+ *
+ * Shares are derived on read over the active set (design section 2.4), shown
+ * beside the raw weight so both the thing you edit and the thing you care about
+ * are visible at once.
+ */
+export function formatTree(s: Snapshot): string {
+  if (s.objectives.length === 0) {
+    return [
+      "<b>No objectives yet.</b>",
+      "",
+      "<code>/add Guitar 3</code> — an objective with relative weight 3",
+      "<code>/add Guitar &gt; Scales</code> — a sub-objective under it",
+      "",
+      "Weights are relative and need not add up to anything.",
+    ].join("\n");
+  }
+
+  const activeWeight = s.objectives
+    .filter((o) => o.active === 1)
+    .reduce((a, o) => a + o.weight, 0);
+
+  const lines: string[] = [];
+  for (const o of [...s.objectives].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)) {
+    const total = totalPointsForObjective(s, o.id);
+    const share =
+      o.active === 1 && activeWeight > 0 ? `${Math.round((o.weight / activeWeight) * 100)}%` : "–";
+    const flags = [
+      o.active === 0 ? "paused" : null,
+      o.active === 1 && o.weight === 0 ? "never recommended" : null,
+    ].filter(Boolean);
+
+    lines.push(
+      `<b>${escapeHtml(o.name)}</b>  <code>w=${points(o.weight)}</code> ${share}` +
+        `  ·  ${points(total)} all time` +
+        (flags.length > 0 ? `  <i>(${flags.join(", ")})</i>` : ""),
+    );
+
+    const kids = childrenOf(s, o.id, false);
+    // A lone default child is the objective itself, so listing it twice is noise.
+    if (kids.length === 1 && kids[0]!.is_default === 1) continue;
+    for (const k of kids) {
+      const kt = s.totalBySub.get(k.id) ?? 0;
+      const marks = [
+        k.is_default === 1 ? "default" : null,
+        k.active === 0 ? "paused" : null,
+      ].filter(Boolean);
+      lines.push(
+        `    ${escapeHtml(k.name)} — ${points(kt)}` +
+          (marks.length > 0 ? ` <i>(${marks.join(", ")})</i>` : ""),
+      );
+    }
+  }
+
+  return lines.join("\n");
+}

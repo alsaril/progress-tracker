@@ -215,3 +215,140 @@ export async function deleteSession(
   // `meta.changes` is 0 if something else deleted it between the two calls.
   return res.meta.changes > 0 ? described : null;
 }
+
+// -- tree editing (design section 8 step 6) ------------------------------------
+
+/**
+ * Create an objective together with its default child (design section 2.2), so
+ * points are always recorded against a leaf and every query stays uniform.
+ *
+ * Both statements go in one `batch`, which D1 runs as a transaction, so
+ * `last_insert_rowid()` refers to the objective just inserted and an objective
+ * can never exist without a child.
+ */
+export async function createObjective(
+  db: D1Database,
+  name: string,
+  weight: number,
+): Promise<void> {
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO objectives (name, weight, sort_order)
+         VALUES (?1, ?2, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM objectives))`,
+      )
+      .bind(name, weight),
+    db
+      .prepare(
+        `INSERT INTO sub_objectives (objective_id, name, is_default, sort_order)
+         VALUES (last_insert_rowid(), ?1, 1, 0)`,
+      )
+      .bind(name),
+  ]);
+}
+
+export async function createSubObjective(
+  db: D1Database,
+  objectiveId: number,
+  name: string,
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO sub_objectives (objective_id, name, sort_order)
+       VALUES (?1, ?2,
+         (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM sub_objectives WHERE objective_id = ?1))`,
+    )
+    .bind(objectiveId, name)
+    .run();
+}
+
+export async function setObjectiveWeight(
+  db: D1Database,
+  objectiveId: number,
+  weight: number,
+): Promise<void> {
+  await db
+    .prepare("UPDATE objectives SET weight = ?2 WHERE id = ?1")
+    .bind(objectiveId, weight)
+    .run();
+}
+
+export async function renameObjective(
+  db: D1Database,
+  objectiveId: number,
+  name: string,
+): Promise<void> {
+  await db.prepare("UPDATE objectives SET name = ?2 WHERE id = ?1").bind(objectiveId, name).run();
+}
+
+export async function renameSubObjective(
+  db: D1Database,
+  subId: number,
+  name: string,
+): Promise<void> {
+  await db.prepare("UPDATE sub_objectives SET name = ?2 WHERE id = ?1").bind(subId, name).run();
+}
+
+export async function setObjectiveActive(
+  db: D1Database,
+  objectiveId: number,
+  active: boolean,
+): Promise<void> {
+  await db
+    .prepare("UPDATE objectives SET active = ?2 WHERE id = ?1")
+    .bind(objectiveId, active ? 1 : 0)
+    .run();
+}
+
+export async function setSubActive(
+  db: D1Database,
+  subId: number,
+  active: boolean,
+): Promise<void> {
+  await db
+    .prepare("UPDATE sub_objectives SET active = ?2 WHERE id = ?1")
+    .bind(subId, active ? 1 : 0)
+    .run();
+}
+
+/**
+ * Recorded sessions under an objective, counting rows rather than summing
+ * points: a correction row pair can sum to zero while the history is real.
+ */
+export async function sessionCountForObjective(
+  db: D1Database,
+  objectiveId: number,
+): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS c FROM sessions
+        WHERE sub_objective_id IN (SELECT id FROM sub_objectives WHERE objective_id = ?1)`,
+    )
+    .bind(objectiveId)
+    .first<{ c: number }>();
+  return Number(row?.c ?? 0);
+}
+
+export async function sessionCountForSub(db: D1Database, subId: number): Promise<number> {
+  const row = await db
+    .prepare("SELECT COUNT(*) AS c FROM sessions WHERE sub_objective_id = ?1")
+    .bind(subId)
+    .first<{ c: number }>();
+  return Number(row?.c ?? 0);
+}
+
+/**
+ * Delete an objective and its children. Only ever called once the caller has
+ * checked there are no sessions underneath: the log is the one thing that
+ * cannot be reconstructed (design section 7), so nothing here may destroy it.
+ */
+export async function deleteObjective(db: D1Database, objectiveId: number): Promise<void> {
+  await db.batch([
+    db.prepare("DELETE FROM sub_objectives WHERE objective_id = ?1").bind(objectiveId),
+    db.prepare("DELETE FROM objectives WHERE id = ?1").bind(objectiveId),
+  ]);
+}
+
+export async function deleteSubObjective(db: D1Database, subId: number): Promise<void> {
+  await db.prepare("DELETE FROM sub_objectives WHERE id = ?1").bind(subId).run();
+}

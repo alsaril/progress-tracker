@@ -200,3 +200,47 @@ export function shares(s: Snapshot): { rows: ShareRow[]; weeklyTotal: number } {
 
   return { rows, weeklyTotal };
 }
+
+// -- name lookup, for the text-driven editing commands -------------------------
+
+export type Lookup<T> =
+  | { kind: "found"; value: T }
+  | { kind: "none" }
+  | { kind: "ambiguous"; names: string[] };
+
+const eq = (a: string, b: string): boolean =>
+  a.toLowerCase() === b.toLowerCase();
+
+/** Objectives are matched case-insensitively, including paused ones. */
+export function findObjectiveByName(s: Snapshot, name: string): Lookup<Objective> {
+  const hits = s.objectives.filter((o) => eq(o.name, name));
+  if (hits.length === 1) return { kind: "found", value: hits[0]! };
+  if (hits.length === 0) return { kind: "none" };
+  return { kind: "ambiguous", names: hits.map((o) => o.name) };
+}
+
+/**
+ * Sub-objectives are matched case-insensitively, optionally within one parent.
+ * Unqualified, the same child name under two objectives is ambiguous, and the
+ * caller is told to qualify it as `Parent > Child`.
+ */
+export function findSubByName(
+  s: Snapshot,
+  name: string,
+  objectiveId?: number,
+): Lookup<SubObjective> {
+  const hits = s.subs.filter(
+    (x) => eq(x.name, name) && (objectiveId === undefined || x.objective_id === objectiveId),
+  );
+  if (hits.length === 1) return { kind: "found", value: hits[0]! };
+  if (hits.length === 0) return { kind: "none" };
+  const parent = (x: SubObjective): string =>
+    s.objectives.find((o) => o.id === x.objective_id)?.name ?? "?";
+  return { kind: "ambiguous", names: hits.map((x) => `${parent(x)} > ${x.name}`) };
+}
+
+/** True when the objective has never had a real child added (section 2.2). */
+export function hasOnlyDefaultChild(s: Snapshot, objectiveId: number): boolean {
+  const kids = s.subs.filter((x) => x.objective_id === objectiveId);
+  return kids.length === 1 && kids[0]!.is_default === 1;
+}

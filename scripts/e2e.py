@@ -118,6 +118,20 @@ def buttons(made: list[dict]) -> list[str]:
     return out
 
 
+_uid = [500]
+
+
+def cmd(text: str) -> str:
+    """Send a text command and return everything the bot said back."""
+    calls.clear()
+    _uid[0] += 1
+    send(json.dumps({"update_id": _uid[0], "message": {
+        "message_id": _uid[0], "chat": {"id": ALLOWED_ID},
+        "from": {"id": ALLOWED_ID}, "text": text}}))
+    time.sleep(0.7)
+    return texts(list(calls))
+
+
 def db(sql: str) -> list[dict]:
     res = subprocess.run(
         ["npx", "wrangler", "d1", "execute", "practice-tracker", "--local",
@@ -211,6 +225,90 @@ def main() -> int:
     print("\n/undo on an empty log:")
     made = replay("undo-command.json")
     check("says the log is empty rather than failing", "empty" in texts(made), texts(made))
+
+    # ---- tree editing (design section 8 step 6) ----------------------------
+    # Works on its own uniquely-named objective and cleans up after itself, so
+    # it neither depends on nor disturbs the seeded tree.
+    print("\n/add, /tree, /weight:")
+    NAME, SUB = "ZzTestObjective", "ZzTestChild"
+    cmd(f"/delete {NAME}")  # in case a previous run died halfway
+
+    out = cmd(f"/add {NAME} 3")
+    check("adds an objective with a weight", "Added" in out and NAME in out, out[:120])
+    check("shows the resulting tree, so renormalising is visible", "w=3" in out, out[:160])
+
+    out = cmd(f"/add {NAME} 3")
+    check("refuses a duplicate objective name", "already" in out.lower(), out[:120])
+
+    out = cmd("/tree")
+    check("lists the new objective in /tree", NAME in out, out[:160])
+
+    out = cmd(f"/weight {NAME} 30%")
+    check("accepts a percentage and converts it to a raw weight",
+          "weight 3 →" in out, out[:160])
+
+    out = cmd(f"/weight {NAME} 0")
+    check("weight 0 explains that history is kept",
+          "never be recommended" in out, out[:160])
+    out = cmd("/next")
+    check("a zero-weight objective is not recommended", NAME not in out, out[:120])
+
+    cmd(f"/weight {NAME} 2")
+    out = cmd(f"/add {NAME} > {SUB}")
+    check("adds a sub-objective", "Added" in out and SUB in out, out[:120])
+    check("explains that the default child keeps its history",
+          "default" in out.lower() or "original" in out.lower(), out[:200])
+
+    print("\n/rename, /pause, /resume:")
+    out = cmd(f"/rename {NAME} > {NAME}2")
+    check("renames an objective", f"{NAME}2" in out, out[:120])
+    out = cmd(f"/pause {NAME}2")
+    check("pauses and says the history is kept", "paused" in out.lower(), out[:120])
+    out = cmd("/next")
+    check("a paused objective is not recommended", f"{NAME}2" not in out, out[:120])
+    out = cmd(f"/resume {NAME}2")
+    check("resumes", "resumed" in out.lower(), out[:120])
+
+    print("\nerror handling:")
+    out = cmd("/add")
+    check("/add with no arguments shows usage", "/add" in out, out[:80])
+    out = cmd("/weight NoSuchThing 3")
+    check("names an unknown objective plainly", "No objective" in out, out[:120])
+    out = cmd("/add A > B > C")
+    check("refuses a third tree level", "two levels" in out, out[:120])
+    out = cmd("/weight ZzTestObjective2 -5")
+    check("refuses a negative weight", "negative" in out.lower(), out[:120])
+
+    print("\n/delete guards the log:")
+    # Record against it, then prove deletion is refused.
+    rec = None
+    out = cmd("/tree")
+    subs = db("SELECT so.id FROM sub_objectives so JOIN objectives o ON o.id=so.objective_id "
+              f"WHERE o.name='{NAME}2' AND so.is_default=1")
+    if subs:
+        rec = int(subs[0]["id"])
+        calls.clear()
+        send(json.dumps({"update_id": 900, "callback_query": {
+            "id": "cq-x", "from": {"id": ALLOWED_ID}, "data": f"rec:{rec}",
+            "message": {"message_id": 99, "chat": {"id": ALLOWED_ID}}}}))
+        time.sleep(0.8)
+    out = cmd(f"/delete {NAME}2")
+    check("refuses to delete something with recorded sessions",
+          "cannot be rebuilt" in out or "recorded" in out, out[:160])
+    check("points at /pause as the safe alternative", "/pause" in out, out[:200])
+
+    # Undo the session, then deletion is allowed again.
+    sid = db("SELECT id FROM sessions ORDER BY id DESC LIMIT 1")
+    if sid:
+        calls.clear()
+        send(json.dumps({"update_id": 901, "callback_query": {
+            "id": "cq-u", "from": {"id": ALLOWED_ID}, "data": f"undo:{int(sid[0]['id'])}",
+            "message": {"message_id": 99, "chat": {"id": ALLOWED_ID}}}}))
+        time.sleep(0.8)
+    out = cmd(f"/delete {NAME}2")
+    check("deletes cleanly once nothing is recorded", "Deleted" in out, out[:160])
+    out = cmd("/tree")
+    check("the deleted objective is gone from /tree", f"{NAME}2" not in out, out[:200])
 
     print()
     if failures:

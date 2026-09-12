@@ -13,6 +13,14 @@
 
 import { renderDistribution } from "./chart.js";
 import {
+  handleAdd,
+  handleDelete,
+  handleRename,
+  handleSetActive,
+  handleTree,
+  handleWeight,
+} from "./edit.js";
+import {
   deleteSession,
   latestSessionId,
   load,
@@ -102,7 +110,18 @@ export async function showLog(ctx: Ctx, target: Target): Promise<void> {
   const rec = recommend(snapshot);
 
   if (snapshot.objectives.filter((o) => o.active === 1).length === 0) {
-    await emit(ctx, target, "No objectives yet. Seed the tree with scripts/seed.sql.");
+    await emit(
+      ctx,
+      target,
+      [
+        "<b>No objectives yet.</b>",
+        "",
+        "<code>/add Guitar 3</code> — an objective with relative weight 3",
+        "<code>/add Guitar &gt; Scales</code> — a sub-objective under it",
+        "",
+        "Then <code>/next</code> will have something to recommend.",
+      ].join("\n"),
+    );
     return;
   }
 
@@ -201,10 +220,20 @@ export async function showStats(ctx: Ctx, target: Target): Promise<void> {
 const HELP = [
   "<b>Practice Tracker</b>",
   "",
+  "<b>Every day</b>",
   "/next — what to practise now, one tap to record",
   "/log — pick anything from the tree",
   "/stats — this week's balance, then all time",
   "/undo — remove the most recent session",
+  "",
+  "<b>Setting the tree up</b>",
+  "/tree — the whole tree, with weights and shares",
+  "<code>/add Guitar 3</code> — an objective, relative weight 3",
+  "<code>/add Guitar &gt; Scales</code> — a sub-objective under it",
+  "<code>/weight Guitar 4</code> — or <code>30%</code>",
+  "<code>/rename Guitar &gt; Classical guitar</code>",
+  "<code>/pause Guitar</code> · <code>/resume Guitar</code> — keeps the history",
+  "<code>/delete Guitar</code> — only while nothing is recorded against it",
 ].join("\n");
 
 export async function showHelp(ctx: Ctx): Promise<void> {
@@ -214,11 +243,37 @@ export async function showHelp(ctx: Ctx): Promise<void> {
 // -------------------------------------------------------------------- dispatch
 
 export async function handleCommand(ctx: Ctx, text: string): Promise<void> {
-  // Strip any @botname suffix and arguments.
-  const cmd = text.trim().split(/\s+/)[0]!.split("@")[0]!.toLowerCase();
+  // Strip any @botname suffix; keep everything after the command as arguments.
+  const trimmed = text.trim();
+  const firstSpace = trimmed.search(/\s/);
+  const head = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace);
+  const cmd = head.split("@")[0]!.toLowerCase();
+  const args = firstSpace === -1 ? "" : trimmed.slice(firstSpace + 1);
   const send: Target = { send: true };
 
   switch (cmd) {
+    case "/add":
+      await ctx.tg.sendMessage(ctx.chatId, await handleAdd(ctx.db, ctx.now, args));
+      return;
+    case "/tree":
+      await ctx.tg.sendMessage(ctx.chatId, await handleTree(ctx.db, ctx.now));
+      return;
+    case "/weight":
+    case "/weights":
+      await ctx.tg.sendMessage(ctx.chatId, await handleWeight(ctx.db, ctx.now, args));
+      return;
+    case "/rename":
+      await ctx.tg.sendMessage(ctx.chatId, await handleRename(ctx.db, ctx.now, args));
+      return;
+    case "/pause":
+      await ctx.tg.sendMessage(ctx.chatId, await handleSetActive(ctx.db, ctx.now, args, false));
+      return;
+    case "/resume":
+      await ctx.tg.sendMessage(ctx.chatId, await handleSetActive(ctx.db, ctx.now, args, true));
+      return;
+    case "/delete":
+      await ctx.tg.sendMessage(ctx.chatId, await handleDelete(ctx.db, ctx.now, args));
+      return;
     case "/start":
     case "/log":
       await showLog(ctx, send);

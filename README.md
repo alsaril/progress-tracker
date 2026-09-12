@@ -7,6 +7,8 @@ distribution toward your target weights.
 Implements steps 1–5 of `practice-tracker-design.md` § 8. TypeScript on
 Cloudflare Workers with D1.
 
+**Every day** — all tap-driven:
+
 | Command | What it does |
 |---|---|
 | `/next` | The recommendation, one tap to record it. The everyday path. |
@@ -14,15 +16,29 @@ Cloudflare Workers with D1.
 | `/stats` | This week's balance chart, then the all-time breakdown. |
 | `/undo` | Removes the most recent session. |
 
-Not built yet (design § 8 steps 6–7): `/add`, `/edit`, `/weights`, `/export`,
-and the cron backup. Until they exist, edit the tree in `scripts/seed.sql` and
-re-run the seed, or use `wrangler d1 execute` directly.
+**Building the tree** — typed, because setup is bulk entry:
+
+| Command | What it does |
+|---|---|
+| `/tree` | The whole tree: raw weights, derived shares, totals, what is paused. |
+| `/add Guitar 3` | New objective with relative weight 3, plus its default child. |
+| `/add Guitar > Scales` | New sub-objective. Only one `>` — the tree is two levels deep. |
+| `/weight Guitar 4` | Raw weight, or `/weight Guitar 30%` converted against the current sum. `0` keeps the history but never recommends it. |
+| `/rename Guitar > Classical guitar` | Renames an objective or a sub-objective. |
+| `/pause Guitar` · `/resume Guitar` | Keeps the history; the remaining weights renormalise around it. |
+| `/delete Guitar` | Only while nothing has been recorded against it — otherwise it refuses and points at `/pause`. |
+
+Your objectives live in the database, built from the bot. They are deliberately
+not in this repository: `scripts/seed.sql` is a sample tree for local
+development and CI only.
+
+Not built (design § 8 step 7): `/export` and the cron backup.
 
 ## Setup
 
 ```bash
 npm ci            # never `npm install` — see Dependencies
-npm test          # 67 unit tests, no network or account needed
+npm test          # 97 unit tests, no network or account needed
 npm run typecheck
 ```
 
@@ -68,13 +84,16 @@ npm run dev
 With the dev server up, run the end-to-end harness in another shell:
 
 ```bash
-npm run e2e     # 27 checks, ~10s
+npm run e2e     # 47 checks, ~30s
 ```
 
 It stands up a stub Bot API that `TELEGRAM_API_BASE` points at, replays
 `test/fixtures/` through `POST /webhook`, and asserts on the calls the Worker
 makes back out — including that a wrong secret, an unknown sender, and a
-non-webhook route are all turned away **without making any Bot API call**.
+non-webhook route are all turned away **without making any Bot API call**, and
+that `/delete` refuses to destroy recorded history. The editing checks work on
+their own uniquely-named objective and clean up after themselves, so they
+neither depend on nor disturb the seeded tree.
 
 Or drive it by hand:
 
@@ -94,8 +113,8 @@ curl -X POST http://127.0.0.1:8787/webhook \
 2. `npm audit --audit-level=high` — **fails the build on any high advisory**,
    including ones that appear upstream later
 3. `npm run typecheck`
-4. `npm test` (67 unit tests)
-5. `npm run e2e` (27 checks against a real `wrangler dev` with a seeded local D1)
+4. `npm test` (97 unit tests)
+5. `npm run e2e` (47 checks against a real `wrangler dev` with a seeded local D1)
 
 Then, only on `main` and only if all of that passed, it deploys with
 `npx wrangler deploy` — or skips the deploy with a **warning** if
@@ -241,7 +260,9 @@ src/week.ts        weekly bucket arithmetic, DST-aware      pure
 src/scoring.ts     both recommendation stages, all tie-breaks pure
 src/format.ts      the § 6.1 balance chart and messages     pure
 src/chart-svg.ts   the § 6.2 SVG                            pure
+src/parse.ts       argument parsing for the edit commands   pure
 src/chart.ts       resvg rasterisation                      Worker-only
+src/edit.ts        /add /tree /weight /rename /pause /delete
 src/db.ts          D1 → Snapshot, and the two writes
 src/telegram.ts    Bot API client
 src/commands.ts    commands and callbacks
