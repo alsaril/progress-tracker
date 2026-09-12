@@ -7,16 +7,24 @@ sequence below differs, something is genuinely wrong rather than just surprising
 
 Work through it in Telegram. Roughly ten minutes.
 
-**Before you start**, register the webhook (once, after the first deploy):
+Deployed at **https://practice-tracker.alsaril.workers.dev**, with the webhook
+registered and verified: `pending_update_count: 0`, no `last_error_message`, and
+`allowed_updates` narrowed to `message` and `callback_query`.
+
+If you ever need to re-register it (a changed subdomain, or a rotated secret):
 
 ```bash
 BOT_TOKEN=... WEBHOOK_SECRET=... ./scripts/set-webhook.sh \
-  https://practice-tracker.<your-subdomain>.workers.dev/webhook
+  https://practice-tracker.alsaril.workers.dev/webhook
 ```
 
-It prints `getWebhookInfo` afterwards. Expect `pending_update_count: 0` and no
-`last_error_message`. If `last_error_message` mentions 403, the
-`WEBHOOK_SECRET` on the Worker and the one you passed here disagree.
+A `last_error_message` mentioning 403 means the `WEBHOOK_SECRET` on the Worker
+and the one passed here disagree.
+
+The public surface was checked from outside, and is a closed door: `GET /` and
+`GET /webhook` both 404, `POST /webhook` without a valid secret token 403, and
+every rejected request returns an **empty body** — no version banner, no error
+detail, nothing confirming a bot lives there.
 
 ---
 

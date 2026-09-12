@@ -68,7 +68,7 @@ missing".
    ```bash
    npm run deploy
    BOT_TOKEN=... WEBHOOK_SECRET=... ./scripts/set-webhook.sh \
-     https://practice-tracker.<you>.workers.dev/webhook
+     https://practice-tracker.alsaril.workers.dev/webhook
    ```
 
 ## Running locally
