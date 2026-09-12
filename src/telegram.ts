@@ -11,6 +11,44 @@
 export type InlineKeyboardButton = { text: string; callback_data: string };
 export type InlineKeyboard = InlineKeyboardButton[][];
 
+/**
+ * The three shapes of reply markup this bot uses.
+ *
+ *  - an inline keyboard, attached under one message (the daily path);
+ *  - a persistent reply keyboard, which replaces the user's letter keys with
+ *    buttons that stay put between messages — what BotFather does;
+ *  - a forced reply, which opens the compose box already quoting our prompt, so
+ *    an argument can be typed without also typing the command name.
+ *
+ * A plain `InlineKeyboard` array is still accepted directly, so the common case
+ * reads as it did before.
+ */
+export type Markup =
+  | { inline: InlineKeyboard }
+  | { keyboard: string[][] }
+  | { removeKeyboard: true }
+  | { forceReply: true; placeholder?: string };
+
+function replyMarkup(markup: InlineKeyboard | Markup | undefined): unknown {
+  if (!markup) return undefined;
+  if (Array.isArray(markup)) return { inline_keyboard: markup };
+  if ("inline" in markup) return { inline_keyboard: markup.inline };
+  if ("keyboard" in markup) {
+    return {
+      keyboard: markup.keyboard.map((row) => row.map((text) => ({ text }))),
+      resize_keyboard: true,
+      // Keeps the buttons up instead of collapsing behind the grid icon after
+      // each message, which is the whole point of a persistent keyboard.
+      is_persistent: true,
+    };
+  }
+  if ("removeKeyboard" in markup) return { remove_keyboard: true };
+  return {
+    force_reply: true,
+    ...(markup.placeholder ? { input_field_placeholder: markup.placeholder } : {}),
+  };
+}
+
 /** Escape for parse_mode: "HTML". Objective names are user-supplied text. */
 export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -59,16 +97,22 @@ export class Telegram {
   async sendMessage(
     chatId: number,
     text: string,
-    keyboard?: InlineKeyboard,
+    markup?: InlineKeyboard | Markup,
   ): Promise<{ messageId: number }> {
+    const reply_markup = replyMarkup(markup);
     const result = await this.#call("sendMessage", {
       chat_id: chatId,
       text,
       parse_mode: "HTML",
       link_preview_options: { is_disabled: true },
-      ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
+      ...(reply_markup ? { reply_markup } : {}),
     });
     return { messageId: Number(result["message_id"]) };
+  }
+
+  /** Tell Telegram which commands to list behind the Menu button. */
+  async setMyCommands(commands: { command: string; description: string }[]): Promise<void> {
+    await this.#call("setMyCommands", { commands });
   }
 
   /**

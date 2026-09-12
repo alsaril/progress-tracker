@@ -28,6 +28,19 @@ detail, nothing confirming a bot lives there.
 
 ---
 
+## 0 · The keyboard
+
+| Do | Expect |
+|---|---|
+| Send `/start` | A help message, and the letter keys replaced by six buttons: **Next · Log · Stats · Tree · Undo · Manage**. They stay up between messages. |
+| Tap the **Menu** button (or type `/`) | Telegram lists every command with a description. |
+| Tap **🌳 Tree** | Same as typing `/tree`. Button labels are aliases for commands. |
+| Tap **⚙️ Manage** → **➕ Objective** | The compose box opens quoting "New objective", with `Guitar 3` as a placeholder. |
+| Reply `Alpha 3` | Objective created — you typed a name, never a command. |
+
+Everything below can be done from the keyboard. The typed forms are given
+because they are quicker to read, and quicker for bulk entry.
+
 ## 1 · Silence for strangers, and an empty start
 
 | Do | Expect |
@@ -43,7 +56,7 @@ The point of the last two: the degenerate empty state is a normal answer.
 
 | Do | Expect |
 |---|---|
-| `/add Alpha 3` | "Added **Alpha** with weight 3", then the tree. |
+| `/add Alpha 3` | "Added **Alpha** with weight 3", then the tree. (Or ⚙️ Manage → ➕ Objective → reply `Alpha 3`.) |
 | `/add Beta 2` | Tree now shows `Alpha w=3 50%` and `Beta w=2 33%`… |
 | `/add Gamma 1` | …and finally **Alpha 50% · Beta 33% · Gamma 17%**. |
 

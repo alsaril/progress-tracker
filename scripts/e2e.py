@@ -132,6 +132,29 @@ def cmd(text: str) -> str:
     return texts(list(calls))
 
 
+def tap(data: str, message_id: int = 77) -> list[dict]:
+    """Press an inline button."""
+    calls.clear()
+    _uid[0] += 1
+    send(json.dumps({"update_id": _uid[0], "callback_query": {
+        "id": f"cq{_uid[0]}", "from": {"id": ALLOWED_ID}, "data": data,
+        "message": {"message_id": message_id, "chat": {"id": ALLOWED_ID}}}}))
+    time.sleep(0.7)
+    return list(calls)
+
+
+def answer(quoted: str, text: str) -> str:
+    """Reply to one of the bot's forced-reply prompts."""
+    calls.clear()
+    _uid[0] += 1
+    send(json.dumps({"update_id": _uid[0], "message": {
+        "message_id": _uid[0], "chat": {"id": ALLOWED_ID},
+        "from": {"id": ALLOWED_ID}, "text": text,
+        "reply_to_message": {"text": quoted}}}))
+    time.sleep(0.7)
+    return texts(list(calls))
+
+
 def db(sql: str) -> list[dict]:
     res = subprocess.run(
         ["npx", "wrangler", "d1", "execute", "practice-tracker", "--local",
@@ -309,6 +332,65 @@ def main() -> int:
     check("deletes cleanly once nothing is recorded", "Deleted" in out, out[:160])
     out = cmd("/tree")
     check("the deleted objective is gone from /tree", f"{NAME}2" not in out, out[:200])
+
+    # ---- tapping instead of typing ---------------------------------------
+    print("\npersistent keyboard:")
+    calls.clear()
+    out_calls = []
+    _uid[0] += 1
+    send(json.dumps({"update_id": _uid[0], "message": {
+        "message_id": _uid[0], "chat": {"id": ALLOWED_ID},
+        "from": {"id": ALLOWED_ID}, "text": "/start"}}))
+    time.sleep(1.0)
+    out_calls = list(calls)
+    kb = [c for c in out_calls
+          if isinstance(c["body"].get("reply_markup"), dict)
+          and "keyboard" in c["body"]["reply_markup"]]
+    check("/start sends a persistent reply keyboard", len(kb) >= 1)
+    if kb:
+        rm = kb[0]["body"]["reply_markup"]
+        check("the keyboard is persistent and resized",
+              rm.get("is_persistent") is True and rm.get("resize_keyboard") is True, str(rm)[:120])
+        labels = [b["text"] for row in rm["keyboard"] for b in row]
+        check("it carries the everyday actions", len(labels) == 6, str(labels))
+    check("/start registers the Menu command list",
+          any(c["method"] == "setMyCommands" for c in out_calls),
+          str([c["method"] for c in out_calls]))
+
+    print("\nbutton labels act as commands:")
+    out = cmd("▶️ Next")
+    check("tapping Next behaves like /next", "furthest behind" in out or "Nothing to practise" in out, out[:100])
+    out = cmd("🌳 Tree")
+    check("tapping Tree behaves like /tree", "w=" in out or "No objectives" in out, out[:100])
+    out = cmd("⚙️ Manage")
+    check("tapping Manage opens the editing menu", "Manage the tree" in out, out[:100])
+
+    print("\nadding an objective without typing a command:")
+    made = tap("ask:add")
+    # Quote the prompt message itself, not every call in the exchange.
+    prompt = next(
+        (c["body"].get("text", "") for c in made
+         if (c["body"].get("reply_markup") or {}).get("force_reply")),
+        "",
+    )
+    check("the menu asks for the name with a forced reply",
+          any((c["body"].get("reply_markup") or {}).get("force_reply") for c in made), str(made)[:160])
+    check("the compose box gets a placeholder showing the shape",
+          any((c["body"].get("reply_markup") or {}).get("input_field_placeholder") for c in made))
+
+    NEW = "ZzTapAdded"
+    cmd(f"/delete {NEW}")
+    stripped = re.sub(r"<[^>]+>", "", prompt)
+    out = answer(stripped, f"{NEW} 5")
+    check("replying with just the name creates the objective",
+          "Added" in out and NEW in out, out[:160])
+    check("and the weight from the reply is used", "w=5" in out, out[:200])
+
+    print("\nreplies to anything else are not mistaken for arguments:")
+    out = answer("✓ Guitar\n1 this week · 1 all time", "Alpha 9")
+    check("an unrelated reply is not read as a command",
+          "Added" not in out, out[:120])
+    cmd(f"/delete {NEW}")
 
     print()
     if failures:

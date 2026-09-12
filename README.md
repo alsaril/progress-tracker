@@ -16,7 +16,20 @@ Cloudflare Workers with D1.
 | `/stats` | This week's balance chart, then the all-time breakdown. |
 | `/undo` | Removes the most recent session. |
 
-**Building the tree** — typed, because setup is bulk entry:
+Nothing needs to be typed from memory. `/start` puts up a **persistent
+keyboard** (as BotFather has) with the everyday actions, `/manage` collects the
+editing ones behind inline buttons, and each of those asks for what it needs
+with a **forced reply** — so adding an objective is a tap, then `Guitar 3`,
+never `/add Guitar 3`. Telegram's Menu button lists every command too, via
+`setMyCommands` on first `/start`.
+
+```
+[ ▶️ Next ]   [ ✍️ Log    ]
+[ 📊 Stats ]  [ 🌳 Tree   ]
+[ ↩️ Undo ]   [ ⚙️ Manage ]
+```
+
+The typed forms all still work, and are faster for bulk entry:
 
 | Command | What it does |
 |---|---|
@@ -38,7 +51,7 @@ Not built (design § 8 step 7): `/export` and the cron backup.
 
 ```bash
 npm ci            # never `npm install` — see Dependencies
-npm test          # 100 unit tests, no network or account needed
+npm test          # 114 unit tests, no network or account needed
 npm run typecheck
 ```
 
@@ -84,7 +97,7 @@ npm run dev
 With the dev server up, run the end-to-end harness in another shell:
 
 ```bash
-npm run e2e     # 47 checks, ~30s
+npm run e2e     # 59 checks, ~40s
 ```
 
 It stands up a stub Bot API that `TELEGRAM_API_BASE` points at, replays
@@ -121,8 +134,8 @@ silently go stale.
 2. `npm audit --audit-level=high` — **fails the build on any high advisory**,
    including ones that appear upstream later
 3. `npm run typecheck`
-4. `npm test` (100 unit tests)
-5. `npm run e2e` (47 checks against a real `wrangler dev` with a seeded local D1)
+4. `npm test` (114 unit tests)
+5. `npm run e2e` (59 checks against a real `wrangler dev` with a seeded local D1)
 
 Then, only on `main` and only if all of that passed, it deploys with
 `npx wrangler deploy` — or skips the deploy with a **warning** if
@@ -269,6 +282,7 @@ src/scoring.ts     both recommendation stages, all tie-breaks pure
 src/format.ts      the § 6.1 balance chart and messages     pure
 src/chart-svg.ts   the § 6.2 SVG                            pure
 src/parse.ts       argument parsing for the edit commands   pure
+src/keyboard.ts    keyboard, aliases, forced-reply routing  pure
 src/chart.ts       resvg rasterisation                      Worker-only
 src/edit.ts        /add /tree /weight /rename /pause /delete
 src/db.ts          D1 → Snapshot, and the two writes
@@ -309,3 +323,8 @@ vitest.
    comes from each row's label, so per-objective hues would be decoration.
 9. **`/stats` also sends an all-time text breakdown**, which § 6.2 leaves to the
    image. It is what makes the view useful with the image off.
+10. **A persistent keyboard, a manage menu and forced replies** are not in the
+    design document, which assumes typed commands for § 8 step 6. Forced replies
+    mean the pending intent lives in the quoted prompt rather than in stored
+    conversation state — nothing to expire, and no way for two prompts to get
+    confused.

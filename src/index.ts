@@ -12,7 +12,7 @@
  * The bot token is never logged and never appears in an error message.
  */
 
-import { type Ctx, handleCallback, handleCommand } from "./commands.js";
+import { type Ctx, handleCallback, handleCommand, handleReply } from "./commands.js";
 import { Telegram } from "./telegram.js";
 
 export type Env = {
@@ -28,7 +28,14 @@ export type Env = {
 
 type TgUser = { id?: number };
 type TgChat = { id?: number };
-type TgMessage = { message_id?: number; chat?: TgChat; from?: TgUser; text?: string };
+type TgMessage = {
+  message_id?: number;
+  chat?: TgChat;
+  from?: TgUser;
+  text?: string;
+  /** Present when the user answers one of our forced-reply prompts. */
+  reply_to_message?: { text?: string };
+};
 type Update = {
   message?: TgMessage;
   edited_message?: TgMessage;
@@ -111,6 +118,12 @@ export default {
       if (!msg || chatId === undefined || !msg.text) return accepted();
 
       const ctx: Ctx = { db: env.DB, tg, chatId, now: new Date(), chartImage };
+
+      // A reply to one of our prompts carries a command's arguments; anything
+      // else is handled as ordinary input.
+      const quoted = msg.reply_to_message?.text;
+      if (quoted && (await handleReply(ctx, quoted, msg.text))) return accepted();
+
       await handleCommand(ctx, msg.text);
       return accepted();
     } catch (err) {

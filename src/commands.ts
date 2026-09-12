@@ -27,6 +27,16 @@ import {
   recordSession,
 } from "./db.js";
 import { formatAllTime, formatBalance, formatRecorded, nextLabel } from "./format.js";
+import {
+  BOT_COMMANDS,
+  MANAGE_MENU,
+  commandForReply,
+  isPromptKey,
+  keyboardMarkup,
+  promptMarkup,
+  promptText,
+  resolveCommand,
+} from "./keyboard.js";
 import { childrenOf, rankObjectives, recommend } from "./scoring.js";
 import { type InlineKeyboard, type Telegram, escapeHtml } from "./telegram.js";
 import { daysLeftInWeek } from "./week.js";
@@ -237,14 +247,28 @@ const HELP = [
 ].join("\n");
 
 export async function showHelp(ctx: Ctx): Promise<void> {
-  await ctx.tg.sendMessage(ctx.chatId, HELP);
+  // Sending the persistent keyboard here (and on /start) is what puts the
+  // buttons up; it then stays until explicitly replaced.
+  await ctx.tg.sendMessage(ctx.chatId, HELP, keyboardMarkup);
+}
+
+/** The tree-editing actions, which are too rare for permanent keyboard space. */
+export async function showManage(ctx: Ctx, target: Target): Promise<void> {
+  await emit(
+    ctx,
+    target,
+    ["<b>Manage the tree</b>", "", "Each of these asks for what it needs — no command to type."].join(
+      "\n",
+    ),
+    MANAGE_MENU,
+  );
 }
 
 // -------------------------------------------------------------------- dispatch
 
 export async function handleCommand(ctx: Ctx, text: string): Promise<void> {
-  // Strip any @botname suffix; keep everything after the command as arguments.
-  const trimmed = text.trim();
+  // A keyboard button arrives as its own label, so resolve aliases first.
+  const trimmed = resolveCommand(text);
   const firstSpace = trimmed.search(/\s/);
   const head = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace);
   const cmd = head.split("@")[0]!.toLowerCase();
@@ -252,6 +276,9 @@ export async function handleCommand(ctx: Ctx, text: string): Promise<void> {
   const send: Target = { send: true };
 
   switch (cmd) {
+    case "/manage":
+      await showManage(ctx, send);
+      return;
     case "/add":
       await ctx.tg.sendMessage(ctx.chatId, await handleAdd(ctx.db, ctx.now, args));
       return;
@@ -275,6 +302,12 @@ export async function handleCommand(ctx: Ctx, text: string): Promise<void> {
       await ctx.tg.sendMessage(ctx.chatId, await handleDelete(ctx.db, ctx.now, args));
       return;
     case "/start":
+      // First contact: put the keyboard up and register the Menu list, then
+      // behave like /log.
+      await ctx.tg.setMyCommands(BOT_COMMANDS).catch(() => {});
+      await ctx.tg.sendMessage(ctx.chatId, HELP, keyboardMarkup);
+      await showLog(ctx, send);
+      return;
     case "/log":
       await showLog(ctx, send);
       return;
@@ -294,6 +327,23 @@ export async function handleCommand(ctx: Ctx, text: string): Promise<void> {
       // Unknown input from the one allowed user is a typo, not an attack.
       await showHelp(ctx);
   }
+}
+
+/**
+ * A reply to one of our forced-reply prompts. The quoted prompt says which
+ * command it answers, so the reply body is the arguments — no stored state.
+ * Returns false when the reply quotes something else, so it falls through to
+ * ordinary handling.
+ */
+export async function handleReply(
+  ctx: Ctx,
+  quoted: string,
+  text: string,
+): Promise<boolean> {
+  const cmd = commandForReply(quoted);
+  if (!cmd) return false;
+  await handleCommand(ctx, `${cmd} ${text.trim()}`);
+  return true;
 }
 
 export async function handleCallback(
@@ -331,6 +381,15 @@ export async function handleCallback(
     case "next":
       await showNext(ctx, target);
       return;
+    case "tree":
+      await ctx.tg.sendMessage(ctx.chatId, await handleTree(ctx.db, ctx.now));
+      return;
+    case "ask": {
+      // Ask for this command's arguments with a forced reply.
+      if (!rawId || !isPromptKey(rawId)) return;
+      await ctx.tg.sendMessage(ctx.chatId, promptText(rawId), promptMarkup(rawId));
+      return;
+    }
     default:
       await showLog(ctx, target);
   }
