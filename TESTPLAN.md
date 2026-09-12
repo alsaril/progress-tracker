@@ -47,7 +47,7 @@ because they are quicker to read, and quicker for bulk entry.
 |---|---|
 | Send `/next` | A reply. If you get **nothing at all**, `ALLOWED_USER_ID` does not match your account — the bot ignores unknown senders without a word, by design. |
 | Send `/tree` | **"No objectives yet."** plus `/add` usage. |
-| Send `/next` | **"Nothing to practise"** — not an error, not a crash. |
+| Send `/next` | **"Nothing to practice"** — not an error, not a crash. |
 | Send `/stats` | A week header reading `0 sessions`, then "No sessions recorded yet." |
 
 The point of the last two: the degenerate empty state is a normal answer.
@@ -137,8 +137,8 @@ says until Gamma comes round):
 
 | Expect |
 |---|
-| `One` and `Two` are offered **before** `Gamma` comes round again — they have never been practised, so they are owed a turn first. |
-| Between `One` and `Two`, either may go first. **This is the one non-deterministic choice in the whole system**, and only ever among never-practised siblings, where any fixed order would be a fiction. |
+| `One` and `Two` are offered **before** `Gamma` comes round again — they have never been practiced, so they are owed a turn first. |
+| Between `One` and `Two`, either may go first. **This is the one non-deterministic choice in the whole system**, and only ever among never-practiced siblings, where any fixed order would be a fiction. |
 | After all three have one session each, the rotation becomes strict round-robin: longest-untouched first, forever. |
 
 ## 7 · Zero weight and pause differ

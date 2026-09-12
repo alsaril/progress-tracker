@@ -1,7 +1,7 @@
 # Practice Tracker
 
 A single-user Telegram bot that records practice sessions against a two-level
-objective tree and tells you what to practise next, steering the current week's
+objective tree and tells you what to practice next, steering the current week's
 distribution toward your target weights.
 
 Implements steps 1–5 of `practice-tracker-design.md` § 8. TypeScript on
@@ -314,7 +314,7 @@ vitest.
    `crypto.subtle.timingSafeEqual`, so the buffers are always 32 bytes: no throw
    on length mismatch, and no length leak.
 5. **The scorer takes an `rng` parameter**, so § 4.3's random tie-break among
-   never-practised siblings is reproducible under test — the document's own
+   never-practiced siblings is reproducible under test — the document's own
    objection to randomness, answered rather than dodged.
 6. **`ALLOWED_USER_ID` is a Wrangler var**, not a literal in source.
 7. **§ 6.2's QuickChart shortcut is rejected**, and the image is gated (above).

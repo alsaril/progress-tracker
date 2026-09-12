@@ -96,7 +96,7 @@ Two degenerate cases to guard:
   `active = 0`, which also hides it from stats. Stage 1 must treat a zero weight
   as an infinite ratio rather than dividing by zero.
 - If every active objective has weight 0 (or none are active), the recommender
-  returns "nothing to practise" instead of throwing.
+  returns "nothing to practice" instead of throwing.
 
 ---
 
@@ -212,15 +212,15 @@ big objectives get served last every Monday.
 
 Objectives with `weight = 0` are excluded rather than treated as `0/0`. If no
 active objective has a positive weight, the recommender returns "nothing to
-practise" instead of throwing.
+practice" instead of throwing.
 
 ### 4.3 Stage 2 — choose the sub-objective
 
 ```
 selected = argmin( weekly_points(sub) )
            over active children of the selected objective
-tie-break:  oldest last_practiced_at first, NULLs (never practised) first
-then:       random among never-practised items
+tie-break:  oldest last_practiced_at first, NULLs (never practiced) first
+then:       random among never-practiced items
 then:       lowest sort_order, then lowest id
 ```
 
@@ -239,7 +239,7 @@ Weekly counts alone give no signal on Monday, when every child is at zero. The
 `last_practiced_at` already comes out of the aggregate query, so this costs
 nothing.
 
-Randomness is used only among items that have genuinely never been practised,
+Randomness is used only among items that have genuinely never been practiced,
 where the order is arbitrary and a fixed `id` ordering would be a lie. It is
 deliberately **not** the general tie-break: random rotates only in expectation,
 so with four tied children there is a 25% chance of repeating the same one

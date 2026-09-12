@@ -155,7 +155,7 @@ export function isPromptKey(x: string): x is PromptKey {
 
 /** What Telegram lists behind the Menu button (setMyCommands). */
 export const BOT_COMMANDS: { command: string; description: string }[] = [
-  { command: "next", description: "What to practise now" },
+  { command: "next", description: "What to practice now" },
   { command: "log", description: "Record anything from the tree" },
   { command: "stats", description: "This week's balance, then all time" },
   { command: "undo", description: "Remove the most recent session" },

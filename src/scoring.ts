@@ -45,7 +45,7 @@ export type Snapshot = {
   weeklyBySub: Map<number, number>;
   /** All-time points, per sub-objective id. */
   totalBySub: Map<number, number>;
-  /** All-time MAX(recorded_at) per sub-objective id; absent = never practised. */
+  /** All-time MAX(recorded_at) per sub-objective id; absent = never practiced. */
   lastPracticedBySub: Map<number, string>;
 };
 
@@ -113,7 +113,7 @@ export function rankObjectives(s: Snapshot): Objective[] {
  * seamlessly from last week.
  *
  * Randomness applies ONLY among children that have genuinely never been
- * practised, where any fixed order would be a lie. It is deliberately not the
+ * practiced, where any fixed order would be a lie. It is deliberately not the
  * general tie-break: random rotates only in expectation, so with four tied
  * children it would repeat the same one 25% of the time, producing exactly the
  * clumping the rotation exists to prevent.
@@ -131,7 +131,7 @@ export function pickSub(
   const tied = candidates.filter((x) => weekly(x) === fewest);
   if (tied.length === 1) return tied[0]!;
 
-  // Never-practised items sort ahead of everything else.
+  // Never-practiced items sort ahead of everything else.
   const virgin = tied.filter((x) => !s.lastPracticedBySub.has(x.id));
   if (virgin.length > 0) {
     if (virgin.length === 1) return virgin[0]!;
@@ -149,7 +149,7 @@ export function pickSub(
 }
 
 /**
- * Both stages. Returns null when there is nothing to practise — no active
+ * Both stages. Returns null when there is nothing to practice — no active
  * objectives, or every active objective at weight 0 (section 2.4) — rather than
  * throwing.
  */

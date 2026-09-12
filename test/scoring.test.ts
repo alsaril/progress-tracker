@@ -198,7 +198,7 @@ describe("stage 1: choosing the objective", () => {
     expect(rankObjectives(s).map((o) => o.name)).toEqual(["On"]);
   });
 
-  it("returns nothing to practise instead of throwing on degenerate input", () => {
+  it("returns nothing to practice instead of throwing on degenerate input", () => {
     const empty = snapshot([], []);
     expect(recommend(empty)).toBeNull();
 
@@ -215,7 +215,7 @@ describe("stage 1: choosing the objective", () => {
     dead.sub.active = 0;
     const live = flat(2, "Live", 1);
     const s = snapshot([dead.objective, live.objective], [dead.sub, live.sub]);
-    // "Dead" outranks "Live" on weight but has no practisable child.
+    // "Dead" outranks "Live" on weight but has no child that can be practiced.
     expect(rankObjectives(s)[0]!.name).toBe("Dead");
     expect(recommend(s)!.objective.name).toBe("Live");
   });
@@ -291,7 +291,7 @@ describe("stage 2: choosing the sub-objective", () => {
       s.lastPracticedBySub.set(r.sub.id, `2026-09-1${i}T10:00:00.000Z`);
     }
 
-    // Never practised, so it goes first — but only because it was owed a turn,
+    // Never practiced, so it goes first — but only because it was owed a turn,
     // not because being new is worth anything afterwards. Once it has had that
     // turn it is just another sibling, and the result is a clean round-robin:
     // it comes back around only after everyone else has had one too.
@@ -305,7 +305,7 @@ describe("stage 2: choosing the sub-objective", () => {
     ]);
   });
 
-  it("uses randomness only among never-practised siblings", () => {
+  it("uses randomness only among never-practiced siblings", () => {
     const o = obj({ id: 1, name: "O", weight: 1 });
     const a = sub({ id: 10, objective_id: 1, name: "A" });
     const b = sub({ id: 11, objective_id: 1, name: "B" });
@@ -326,7 +326,7 @@ describe("stage 2: choosing the sub-objective", () => {
     expect(pickSub(s, 1, () => 1)!.name).toBe("B");
   });
 
-  it("is deterministic once every sibling has been practised", () => {
+  it("is deterministic once every sibling has been practiced", () => {
     const o = obj({ id: 1, name: "O", weight: 1 });
     const a = sub({ id: 10, objective_id: 1, name: "A" });
     const b = sub({ id: 11, objective_id: 1, name: "B" });
@@ -356,7 +356,7 @@ describe("stage 2: choosing the sub-objective", () => {
     expect(pickSub(s, 1)!.name).toBe("General");
   });
 
-  it("returns null for an objective with no practisable children", () => {
+  it("returns null for an objective with no children that can be practiced", () => {
     const o = obj({ id: 1, name: "O", weight: 1 });
     const off = sub({ id: 10, objective_id: 1, name: "off", active: 0 });
     expect(pickSub(snapshot([o], [off]), 1)).toBeNull();

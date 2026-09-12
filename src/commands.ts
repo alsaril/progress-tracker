@@ -111,8 +111,8 @@ function subKeyboard(
 
 // -------------------------------------------------------------------- commands
 
-const NOTHING_TO_PRACTISE =
-  "Nothing to practise — no active objective has a weight above zero.";
+const NOTHING_TO_PRACTICE =
+  "Nothing to practice — no active objective has a weight above zero.";
 
 /** /log and /start: the full keyboard with the recommendation pinned first. */
 export async function showLog(ctx: Ctx, target: Target): Promise<void> {
@@ -139,7 +139,7 @@ export async function showLog(ctx: Ctx, target: Target): Promise<void> {
     snapshot,
     rec ? { subId: rec.sub.id, label: nextLabel(rec) } : null,
   );
-  await emit(ctx, target, "What did you practise?", keyboard);
+  await emit(ctx, target, "What did you practice?", keyboard);
 }
 
 /** /next: the recommendation, with one tap to record it. */
@@ -147,7 +147,7 @@ export async function showNext(ctx: Ctx, target: Target): Promise<void> {
   const { snapshot } = await load(ctx.db, ctx.now);
   const rec = recommend(snapshot);
   if (!rec) {
-    await emit(ctx, target, NOTHING_TO_PRACTISE);
+    await emit(ctx, target, NOTHING_TO_PRACTICE);
     return;
   }
 
@@ -231,7 +231,7 @@ const HELP = [
   "<b>Practice Tracker</b>",
   "",
   "<b>Every day</b>",
-  "/next — what to practise now, one tap to record",
+  "/next — what to practice now, one tap to record",
   "/log — pick anything from the tree",
   "/stats — this week's balance, then all time",
   "/undo — remove the most recent session",

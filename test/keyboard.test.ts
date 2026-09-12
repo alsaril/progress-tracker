@@ -51,7 +51,7 @@ describe("commandForReply", () => {
   it("ignores a reply to anything else, rather than guessing a command", () => {
     // Replying to an old acknowledgement must not be read as arguments.
     expect(commandForReply("✓ Guitar\n1 this week · 1 all time")).toBeNull();
-    expect(commandForReply("What did you practise?")).toBeNull();
+    expect(commandForReply("What did you practice?")).toBeNull();
     expect(commandForReply("")).toBeNull();
   });
 

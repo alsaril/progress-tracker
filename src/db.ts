@@ -71,7 +71,7 @@ export async function load(db: D1Database, now: Date): Promise<Loaded> {
           GROUP BY sub_objective_id`,
       )
       .bind(bounds.start.toISOString(), bounds.end.toISOString()),
-    // Totals and last-practised come out of one scan. `last_practiced_at` is
+    // Totals and last-practiced come out of one scan. `last_practiced_at` is
     // derived here, never stored (design section 3.3).
     db.prepare(
       `SELECT sub_objective_id AS id, SUM(points) AS pts, MAX(recorded_at) AS last

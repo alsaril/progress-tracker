@@ -359,7 +359,7 @@ def main() -> int:
 
     print("\nbutton labels act as commands:")
     out = cmd("▶️ Next")
-    check("tapping Next behaves like /next", "furthest behind" in out or "Nothing to practise" in out, out[:100])
+    check("tapping Next behaves like /next", "furthest behind" in out or "Nothing to practice" in out, out[:100])
     out = cmd("🌳 Tree")
     check("tapping Tree behaves like /tree", "w=" in out or "No objectives" in out, out[:100])
     out = cmd("⚙️ Manage")
