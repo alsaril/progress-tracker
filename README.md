@@ -38,7 +38,7 @@ Not built (design § 8 step 7): `/export` and the cron backup.
 
 ```bash
 npm ci            # never `npm install` — see Dependencies
-npm test          # 97 unit tests, no network or account needed
+npm test          # 100 unit tests, no network or account needed
 npm run typecheck
 ```
 
@@ -105,6 +105,14 @@ curl -X POST http://127.0.0.1:8787/webhook \
        "from":{"id":42},"text":"/next"}}'
 ```
 
+## Testing it in production, on dummy data
+
+`TESTPLAN.md` is a ten-minute walkthrough for the live bot using throwaway
+objectives, with exact expectations rather than vague ones — the recommender is
+deterministic, so it states the precise six-session sequence you should see.
+`test/testplan.test.ts` pins those claims to the code, so the walkthrough cannot
+silently go stale.
+
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on every push and pull request:
@@ -113,7 +121,7 @@ curl -X POST http://127.0.0.1:8787/webhook \
 2. `npm audit --audit-level=high` — **fails the build on any high advisory**,
    including ones that appear upstream later
 3. `npm run typecheck`
-4. `npm test` (97 unit tests)
+4. `npm test` (100 unit tests)
 5. `npm run e2e` (47 checks against a real `wrangler dev` with a seeded local D1)
 
 Then, only on `main` and only if all of that passed, it deploys with
