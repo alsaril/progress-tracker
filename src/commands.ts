@@ -25,8 +25,15 @@ import {
   latestSessionId,
   load,
   recordSession,
+  subObjectiveExists,
 } from "./db.js";
-import { formatAllTime, formatBalance, formatRecorded, nextLabel } from "./format.js";
+import {
+  formatAllTime,
+  formatBalance,
+  formatRecorded,
+  nextLabel,
+  subLabel,
+} from "./format.js";
 import {
   BOT_COMMANDS,
   MANAGE_MENU,
@@ -172,8 +179,7 @@ export async function record(ctx: Ctx, subId: number, target: Target): Promise<v
   // deleted — which would either violate the foreign key (the tap silently
   // doing nothing) or leave an orphan row in the append-only log that no view
   // would ever surface.
-  const before = await load(ctx.db, ctx.now);
-  if (!before.snapshot.subs.some((x) => x.id === subId)) {
+  if (!(await subObjectiveExists(ctx.db, subId))) {
     await emit(
       ctx,
       target,
@@ -212,10 +218,11 @@ export async function undo(ctx: Ctx, sessionId: number | null, target: Target): 
     return;
   }
 
-  const label =
-    removed.subName === removed.objectiveName
-      ? removed.objectiveName
-      : `${removed.objectiveName} → ${removed.subName}`;
+  // Uses the same isFlatObjective rule as every other label, rather than
+  // guessing from a string comparison: that guess called a renamed objective's
+  // default child by its stale name, which the user had never seen.
+  const { snapshot } = await load(ctx.db, ctx.now);
+  const label = subLabel(snapshot, removed.subObjectiveId) || removed.objectiveName;
 
   await emit(ctx, target, `↩ Removed <b>${escapeHtml(label)}</b>`, [
     [{ text: "Log another…", callback_data: "log" }],

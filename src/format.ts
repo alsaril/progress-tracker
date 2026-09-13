@@ -191,8 +191,11 @@ export function formatAllTime(s: Snapshot): string {
         if (kt === 0 && k.active === 0) continue;
         lines.push(
           [
+            // 2 + (LABEL_W + 13) + 5 lands the child's total on exactly the
+            // column where the parent's total ends: 11 + 1 + 14 + 5. The whole
+            // point of a <pre> block is that the columns line up.
             "  ",
-            pad(truncate(k.name, LABEL_W + 12), LABEL_W + 12),
+            pad(truncate(k.name, LABEL_W + 13), LABEL_W + 13),
             padLeft(points(kt), 5),
             k.active === 0 ? " (paused)" : "",
           ].join(""),

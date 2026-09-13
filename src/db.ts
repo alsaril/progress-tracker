@@ -107,13 +107,23 @@ function readConfig(rows: Record<string, unknown>[]): Config {
   const map = new Map<string, string>();
   for (const r of rows) map.set(String(r["key"]), String(r["value"]));
 
-  const windowDays = Number(map.get("window_days"));
+  // weekBounds anchors buckets to the weekday cycle, so only 7 yields
+  // non-overlapping windows; anything else also makes daysLeftInWeek go
+  // negative, because `elapsed` stays mod 7. The config row is documented as
+  // "fix before data accumulates", so an unsupported value is ignored rather
+  // than half-honoured. Section 4.5's alternative windows need an epoch anchor
+  // first.
+  const configured = Number(map.get("window_days"));
+  const windowDays = configured === 7 ? 7 : DEFAULT_CONFIG.windowDays;
+  if (Number.isFinite(configured) && configured !== 7) {
+    console.error(`config.window_days=${configured} is unsupported; using 7`);
+  }
   return {
     weekStartDay: map.has("week_start_day")
       ? parseWeekStartDay(map.get("week_start_day")!)
       : DEFAULT_CONFIG.weekStartDay,
     timezone: map.get("timezone") ?? DEFAULT_CONFIG.timezone,
-    windowDays: Number.isFinite(windowDays) && windowDays > 0 ? windowDays : DEFAULT_CONFIG.windowDays,
+    windowDays,
   };
 }
 
@@ -162,6 +172,7 @@ export async function recordSession(
 
 export type DeletedSession = {
   id: number;
+  subObjectiveId: number;
   subName: string;
   objectiveName: string;
   recordedAt: string;
@@ -174,7 +185,7 @@ export async function describeSession(
 ): Promise<DeletedSession | null> {
   const row = await db
     .prepare(
-      `SELECT s.id AS id, s.recorded_at AS recorded_at,
+      `SELECT s.id AS id, s.recorded_at AS recorded_at, so.id AS sub_id,
               so.name AS sub_name, o.name AS objective_name
          FROM sessions s
          JOIN sub_objectives so ON so.id = s.sub_objective_id
@@ -186,6 +197,7 @@ export async function describeSession(
   if (!row) return null;
   return {
     id: Number(row["id"]),
+    subObjectiveId: Number(row["sub_id"]),
     subName: String(row["sub_name"]),
     objectiveName: String(row["objective_name"]),
     recordedAt: String(row["recorded_at"]),
@@ -273,12 +285,31 @@ export async function setObjectiveWeight(
     .run();
 }
 
+/**
+ * Rename an objective, carrying its default child along when that child still
+ * has the auto-assigned name.
+ *
+ * `createObjective` names the default child after its objective, so leaving it
+ * behind made the two disagree: after `/rename Guitar > Classical guitar`,
+ * undo reported "Classical guitar → Guitar", naming a child the user had never
+ * seen. A default child the user has deliberately renamed (to "General", say)
+ * is left alone — the WHERE clause only matches the old auto name.
+ */
 export async function renameObjective(
   db: D1Database,
   objectiveId: number,
+  oldName: string,
   name: string,
 ): Promise<void> {
-  await db.prepare("UPDATE objectives SET name = ?2 WHERE id = ?1").bind(objectiveId, name).run();
+  await db.batch([
+    db.prepare("UPDATE objectives SET name = ?2 WHERE id = ?1").bind(objectiveId, name),
+    db
+      .prepare(
+        `UPDATE sub_objectives SET name = ?2
+          WHERE objective_id = ?1 AND is_default = 1 AND name = ?3`,
+      )
+      .bind(objectiveId, name, oldName),
+  ]);
 }
 
 export async function renameSubObjective(
@@ -327,6 +358,19 @@ export async function sessionCountForObjective(
     .bind(objectiveId)
     .first<{ c: number }>();
   return Number(row?.c ?? 0);
+}
+
+/**
+ * Does this sub-objective still exist? A single row, rather than the full
+ * snapshot `record()` used to load just to answer this — it is the hottest path
+ * in the bot.
+ */
+export async function subObjectiveExists(db: D1Database, subId: number): Promise<boolean> {
+  const row = await db
+    .prepare("SELECT 1 AS ok FROM sub_objectives WHERE id = ?1")
+    .bind(subId)
+    .first<{ ok: number }>();
+  return row !== null;
 }
 
 export async function sessionCountForSub(db: D1Database, subId: number): Promise<number> {

@@ -214,15 +214,22 @@ export async function handleRename(db: D1Database, now: Date, args: string): Pro
     if (findObjectiveByName(snapshot, parsed.to).kind !== "none") {
       return `There is already an objective called “${escapeHtml(parsed.to)}”.`;
     }
-    await renameObjective(db, target.objective.id, parsed.to);
+    await renameObjective(db, target.objective.id, target.objective.name, parsed.to);
     return `<b>${escapeHtml(parsed.from)}</b> → <b>${escapeHtml(parsed.to)}</b>.`;
   }
 
   // Mirrors the check handleAdd already makes. Without it a rename could create
   // two siblings with the same name — worse than an ambiguous lookup, because
   // not even `Parent > Child` could then tell them apart.
+  //
+  // Anything other than "none" blocks the rename. The previous form tested
+  // `!== "none" && === "found"`, whose first half was implied by the second —
+  // so an "ambiguous" result (siblings already duplicated, which the guards are
+  // meant to prevent) fell through and renamed anyway, compounding exactly the
+  // state this check exists to avoid.
   const clash = findSubByName(snapshot, parsed.to, target.sub.objective_id);
-  if (clash.kind !== "none" && clash.kind === "found" && clash.value.id !== target.sub.id) {
+  const isSelf = clash.kind === "found" && clash.value.id === target.sub.id;
+  if (clash.kind !== "none" && !isSelf) {
     const parentName =
       snapshot.objectives.find((o) => o.id === target.sub.objective_id)?.name ?? "that objective";
     return `“${escapeHtml(parentName)}” already has a “${escapeHtml(parsed.to)}”.`;

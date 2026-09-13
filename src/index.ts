@@ -8,6 +8,9 @@
  *     the only thing standing between the Worker and the open internet.
  *  3. The sender must be the one allowed user id. Anything else gets silence —
  *     no reply, no error, no signal that the bot exists.
+ *  4. The chat must be that user's own private chat. In a private chat the chat
+ *     id equals the user id, so a mismatch means the update came from a group —
+ *     where answering would post the whole tree and history to everyone in it.
  *
  * The bot token is never logged and never appears in an error message.
  */
@@ -93,6 +96,12 @@ export default {
 
     const from = update.callback_query?.from ?? update.message?.from;
     if (!from || from.id !== allowed) return accepted();
+
+    // Verifying the sender is not enough: replies go to chat.id, which in a
+    // group is the group. Adding the bot to one and typing /stats would
+    // otherwise publish every objective and its history there.
+    const chat = update.callback_query?.message?.chat?.id ?? update.message?.chat?.id;
+    if (chat !== allowed) return accepted();
 
     const tg = new Telegram(env.BOT_TOKEN, env.TELEGRAM_API_BASE);
     const chartImage = env.CHART_IMAGE === "on";

@@ -24,7 +24,7 @@ from GitHub Actions.
 
 ```bash
 npm ci            # never `npm install` — see Dependencies
-npm test          # 142 unit tests, no network or account needed
+npm test          # 146 unit tests, no network or account needed
 npm run typecheck
 ```
 
@@ -70,7 +70,7 @@ npm run dev
 With the dev server up, run the end-to-end harness in another shell:
 
 ```bash
-npm run e2e     # 74 checks, ~60s
+npm run e2e     # 80 checks, ~70s
 ```
 
 It stands up a stub Bot API that `TELEGRAM_API_BASE` points at, replays
@@ -107,8 +107,8 @@ silently go stale.
 2. `npm audit --audit-level=high` — **fails the build on any high advisory**,
    including ones that appear upstream later
 3. `npm run typecheck`
-4. `npm test` (142 unit tests)
-5. `npm run e2e` (74 checks against a real `wrangler dev` with a seeded local D1)
+4. `npm test` (146 unit tests)
+5. `npm run e2e` (80 checks against a real `wrangler dev` with a seeded local D1)
 
 Then, only on `main` and only if all of that passed, it deploys with
 `npx wrangler deploy` — or skips the deploy with a **warning** if

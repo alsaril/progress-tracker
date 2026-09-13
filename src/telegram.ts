@@ -86,7 +86,15 @@ export class Telegram {
   }
 
   async #unwrap(method: string, res: Response): Promise<Record<string, unknown>> {
-    const json = (await res.json()) as { ok?: boolean; description?: string; result?: unknown };
+    // Telegram occasionally answers a transient 502 with HTML rather than JSON.
+    // Letting res.json() throw surfaced a bare SyntaxError with no indication of
+    // which call failed, defeating the careful message below.
+    let json: { ok?: boolean; description?: string; result?: unknown };
+    try {
+      json = (await res.json()) as typeof json;
+    } catch {
+      throw new Error(`Telegram ${method} failed: HTTP ${res.status}, non-JSON response`);
+    }
     if (!json.ok) {
       // Editing a message to exactly what it already says is a no-op, not a
       // failure. It happens whenever a button is double-tapped before the first

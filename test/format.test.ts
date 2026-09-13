@@ -140,10 +140,22 @@ describe("formatAllTime", () => {
       Technique   ███████████     120  31%
       Repertoire  ██████████████  160  41%
       Theory      ██████           74  19%
-        Theory                    30
-        Intervals                 44
+        Theory                     30
+        Intervals                  44
       Sight-read… ███              39  10%"
     `);
+  });
+
+  it("aligns a child's total with its parent's", () => {
+    // The <pre> block exists so columns line up on a phone; child rows were
+    // six characters short, so the numbers did not share a right edge.
+    const s = exampleSnapshot({});
+    const lines = plain(formatAllTime(s)).split("\n");
+    const parent = lines.find((l) => l.startsWith("Theory"))!;
+    const child = lines.find((l) => l.startsWith("  Intervals"))!;
+    const rightEdge = (line: string, value: string): number =>
+      line.indexOf(value) + value.length;
+    expect(rightEdge(child, "44")).toBe(rightEdge(parent, "74"));
   });
 
   it("breaks down only objectives that have more than a default child", () => {

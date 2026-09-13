@@ -35,6 +35,24 @@ describe("resolveCommand", () => {
   it("leaves unrelated text alone", () => {
     expect(resolveCommand("Guitar 3")).toBe("Guitar 3");
   });
+
+  it("always returns a string, even for Object.prototype keys", () => {
+    // An object-literal lookup walked the prototype chain, so
+    // resolveCommand("constructor") returned the Object *function*. The
+    // dispatcher then called .search() on it, threw, and the user got total
+    // silence where the help text was due.
+    for (const key of [
+      "constructor",
+      "__proto__",
+      "toString",
+      "valueOf",
+      "hasOwnProperty",
+      "isPrototypeOf",
+    ]) {
+      expect(typeof resolveCommand(key), key).toBe("string");
+      expect(resolveCommand(key)).toBe(key);
+    }
+  });
 });
 
 describe("commandForReply", () => {
@@ -66,6 +84,22 @@ describe("commandForReply", () => {
     for (const a of firsts) {
       const clashes = firsts.filter((b) => b !== a && (a.startsWith(b) || b.startsWith(a)));
       expect(clashes, `${a} is prefix-ambiguous with ${clashes.join(", ")}`).toEqual([]);
+    }
+  });
+});
+
+describe("isPromptKey", () => {
+  it("is true only for real prompts", () => {
+    expect(isPromptKey("add")).toBe(true);
+    expect(isPromptKey("weight")).toBe(true);
+    expect(isPromptKey("nonsense")).toBe(false);
+  });
+
+  it("rejects inherited keys, rather than claiming them as prompts", () => {
+    // `in` matched Object.prototype, so `ask:toString` rendered
+    // "function toString() { [native code] }" as a prompt heading.
+    for (const key of ["toString", "constructor", "__proto__", "valueOf"]) {
+      expect(isPromptKey(key), key).toBe(false);
     }
   });
 });

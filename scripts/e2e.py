@@ -495,6 +495,42 @@ def main() -> int:
     for n in ("ZzAmbA", "ZzAmbB", "ZzStale"):
         cmd(f"/delete {n}")
 
+    # ---- second review round ---------------------------------------------
+    print("\ngroup chats get nothing (finding 4):")
+    calls.clear()
+    _uid[0] += 1
+    # Right sender, wrong chat: the allowed user typing in a group.
+    send(json.dumps({"update_id": _uid[0], "message": {
+        "message_id": _uid[0], "chat": {"id": -1001234567890},
+        "from": {"id": ALLOWED_ID}, "text": "/stats"}}))
+    time.sleep(0.8)
+    check("the allowed user in a group gets no reply at all",
+          len(calls) == 0, f"{len(calls)} call(s): {[c['method'] for c in calls]}")
+    out = cmd("/tree")
+    check("the same command still works in the private chat",
+          "w=" in out or "No objectives" in out, out[:100])
+
+    print("\nprototype keys do not silence the bot (finding 1):")
+    for word in ("constructor", "__proto__"):
+        out = cmd(word)
+        check(f"“{word}” gets the help text instead of silence",
+              "Practice Tracker" in out, f"{word!r} -> {out[:80]!r}")
+
+    print("\nrenaming keeps the default child in step (finding 3):")
+    R = "ZzRenameCase"
+    cmd(f"/delete {R}"); cmd(f"/delete {R}2")
+    cmd(f"/add {R} 400")
+    made = replay("next.json")
+    btn = next((b for b in buttons(made) if b.startswith("rec:")), None)
+    if btn:
+        tap(btn)
+    out = cmd(f"/rename {R} > {R}2")
+    check("rename succeeds", f"{R}2" in out, out[:120])
+    out = cmd("/undo")
+    check("undo names the objective by its NEW name only",
+          f"{R}2" in out and "→" not in out, out[:160])
+    cmd(f"/delete {R}2")
+
     print()
     if failures:
         print(f"{len(failures)} check(s) FAILED: {', '.join(failures)}")

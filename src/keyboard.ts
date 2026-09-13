@@ -31,15 +31,24 @@ export const MAIN_KEYBOARD: string[][] = [
 
 export const keyboardMarkup: Markup = { keyboard: MAIN_KEYBOARD };
 
-/** Button label -> the command it stands for. */
-const ALIASES: Record<string, string> = {
-  "▶️ next": "/next",
-  "✍️ log": "/log",
-  "📊 stats": "/stats",
-  "🌳 tree": "/tree",
-  "↩️ undo": "/undo",
-  "⚙️ manage": "/manage",
-};
+/**
+ * Button label -> the command it stands for.
+ *
+ * A `Map`, not an object literal: indexing an object literal walks the
+ * prototype chain, so `ALIASES["constructor"]` was `Object` — a function, not
+ * undefined — and `?? trimmed` handed a function to the dispatcher, which threw
+ * on `.search()` and left the user with total silence where help was due.
+ * `__proto__` broke the same way. (Only those two reach it, since the lookup
+ * lowercases first and "tostring"/"valueof" miss.)
+ */
+const ALIASES = new Map<string, string>([
+  ["▶️ next", "/next"],
+  ["✍️ log", "/log"],
+  ["📊 stats", "/stats"],
+  ["🌳 tree", "/tree"],
+  ["↩️ undo", "/undo"],
+  ["⚙️ manage", "/manage"],
+]);
 
 /**
  * Resolve a message to a command. Button taps arrive as their label, so they
@@ -47,8 +56,7 @@ const ALIASES: Record<string, string> = {
  */
 export function resolveCommand(text: string): string {
   const trimmed = text.trim();
-  const alias = ALIASES[trimmed.toLowerCase()];
-  return alias ?? trimmed;
+  return ALIASES.get(trimmed.toLowerCase()) ?? trimmed;
 }
 
 // ------------------------------------------------------- forced-reply prompts
@@ -150,7 +158,10 @@ export const MANAGE_MENU = [
 ];
 
 export function isPromptKey(x: string): x is PromptKey {
-  return x in PROMPTS;
+  // `in` would include inherited keys, so isPromptKey("toString") was true and
+  // a callback of `ask:toString` rendered Object.prototype.toString as a prompt.
+  // The predicate was simply lying.
+  return Object.hasOwn(PROMPTS, x);
 }
 
 /** What Telegram lists behind the Menu button (setMyCommands). */
