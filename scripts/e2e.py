@@ -440,6 +440,61 @@ def main() -> int:
         cmd("/undo")
     cmd(f"/delete {G}")
 
+    # ---- review findings: ambiguity is now resolvable ---------------------
+    print("\nambiguous child names can be qualified (finding 1):")
+    for n in ("ZzAmbA", "ZzAmbB"):
+        cmd(f"/delete {n}")
+    cmd("/add ZzAmbA 1"); cmd("/add ZzAmbB 1")
+    cmd("/add ZzAmbA > Shared"); cmd("/add ZzAmbB > Shared")
+
+    out = cmd("/pause Shared")
+    check("an unqualified ambiguous name still reports the clash",
+          "matches more than one" in out, out[:140])
+    check("and advises the qualified form", "&gt; Child" in out or "> Child" in out, out[:160])
+
+    out = cmd("/pause ZzAmbA > Shared")
+    check("the advised qualified form is ACCEPTED", "paused" in out.lower(), out[:160])
+    out = cmd("/resume ZzAmbA > Shared")
+    check("qualified resume works too", "resumed" in out.lower(), out[:140])
+    out = cmd("/rename ZzAmbA > Shared > Renamed")
+    check("qualified rename works", "Renamed" in out, out[:160])
+    out = cmd("/delete ZzAmbB > Shared")
+    check("qualified delete works", "Deleted" in out, out[:160])
+
+    print("\nrename cannot create a duplicate sibling (finding 2):")
+    cmd("/add ZzAmbA > One"); cmd("/add ZzAmbA > Two")
+    out = cmd("/rename Two > One")
+    check("refuses a rename that would duplicate a sibling",
+          "already has" in out, out[:160])
+    out = cmd("/tree")
+    check("both siblings still exist under their parent",
+          "One" in out and "Two" in out, out[:200])
+
+    print("\nstale keyboard taps (finding 5):")
+    cmd("/add ZzStale 1")
+    made = replay("next.json")
+    subs = db("SELECT so.id FROM sub_objectives so JOIN objectives o ON o.id=so.objective_id "
+              "WHERE o.name='ZzStale'")
+    stale = int(subs[0]["id"]) if subs else None
+    cmd("/delete ZzStale")
+    if stale is not None:
+        n_before = int(db("SELECT COUNT(*) c FROM sessions")[0]["c"])
+        made = tap(f"rec:{stale}")
+        n_after = int(db("SELECT COUNT(*) c FROM sessions")[0]["c"])
+        check("a tap on a deleted entry writes no session row",
+              n_after == n_before, f"{n_before} -> {n_after}")
+        check("and says so instead of failing silently",
+              "no longer exists" in texts(made), texts(made)[:140])
+
+    print("\nseed is idempotent (finding 6):")
+    b = int(db("SELECT COUNT(*) c FROM objectives")[0]["c"])
+    subprocess.run(["npm", "run", "seed:local"], capture_output=True, check=False)
+    a = int(db("SELECT COUNT(*) c FROM objectives")[0]["c"])
+    check("re-running the seed adds no duplicates", a == b, f"{b} -> {a}")
+
+    for n in ("ZzAmbA", "ZzAmbB", "ZzStale"):
+        cmd(f"/delete {n}")
+
     print()
     if failures:
         print(f"{len(failures)} check(s) FAILED: {', '.join(failures)}")

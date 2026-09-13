@@ -4,7 +4,7 @@ import {
   isError,
   normaliseName,
   parseAdd,
-  parseName,
+  parseQualifiedName,
   parseRename,
   parseWeight,
   weightForShare,
@@ -86,12 +86,22 @@ describe("parseAdd", () => {
     expect(err(parseAdd("  "))).toMatch(/\/add/);
   });
 
-  it("rejects a percentage, which is meaningless when creating", () => {
-    // "30%" is not a raw weight, so it stays part of the name and then fails
-    // only if the name is unusable; here it becomes the name.
-    expect(ok(parseAdd("Guitar 30%"))).toEqual({
+  it("explains that a share cannot be set while creating", () => {
+    // Previously "30%" silently became part of the NAME.
+    const e = err(parseAdd("Guitar 30%"));
+    expect(e).toMatch(/cannot be set while creating/i);
+    expect(e).toContain("/weight Guitar 30%");
+  });
+
+  it("reports a malformed weight instead of folding it into the name", () => {
+    // Previously `/add Guitar -1` created an objective named "Guitar -1".
+    expect(err(parseAdd("Guitar -1"))).toMatch(/negative/i);
+  });
+
+  it("keeps a trailing token that is not weight-shaped as part of the name", () => {
+    expect(ok(parseAdd("Piano sonata No.2a"))).toEqual({
       kind: "objective",
-      name: "Guitar 30%",
+      name: "Piano sonata No.2a",
       weight: 1,
     });
   });
@@ -126,6 +136,27 @@ describe("parseWeight", () => {
     expect(err(parseWeight("Guitar -1"))).toMatch(/negative/i);
     expect(err(parseWeight("Guitar lots"))).toMatch(/not a number/i);
     expect(err(parseWeight("Guitar 100%"))).toMatch(/nothing for anything else/i);
+  });
+
+  it("rejects a bare % rather than reading it as zero percent", () => {
+    // Number("") is 0, so "%" used to parse as a share of zero — silently
+    // making the objective one that is never recommended again.
+    expect(err(parseWeight("Guitar %"))).toMatch(/not a number/i);
+  });
+
+  it("rejects forms Number() would accept but nobody types as a weight", () => {
+    expect(err(parseWeight("Guitar 0x10"))).toMatch(/not a number/i);
+    expect(err(parseWeight("Guitar Infinity"))).toMatch(/not a number/i);
+  });
+
+  it("still accepts ordinary decimals", () => {
+    expect(ok(parseWeight("Guitar 2.5")).weight).toBe(2.5);
+    expect(ok(parseWeight("Guitar .5")).weight).toBe(0.5);
+    expect(ok(parseWeight("Guitar 12.5%"))).toEqual({
+      name: "Guitar",
+      weight: 12.5,
+      isPercent: true,
+    });
   });
 
   it("shows usage when given too little", () => {
@@ -175,8 +206,34 @@ describe("parseRename and parseName", () => {
   });
 
   it("reads a bare name", () => {
-    expect(ok(parseName("  Guitar  ", "/pause"))).toBe("Guitar");
-    expect(err(parseName("", "/pause"))).toMatch(/pause/);
+    expect(ok(parseQualifiedName("  Guitar  ", "/pause"))).toEqual({ name: "Guitar" });
+    expect(err(parseQualifiedName("", "/pause"))).toMatch(/pause/);
+  });
+
+  it("accepts the qualified form the ambiguity message advises", () => {
+    // The bug this closes: ambiguous() told the user to write `Parent > Child`
+    // while every caller rejected any name containing ">", so an ambiguous
+    // child could never be paused, renamed or deleted.
+    expect(ok(parseQualifiedName("Guitar > Scales", "/pause"))).toEqual({
+      parent: "Guitar",
+      name: "Scales",
+    });
+  });
+
+  it("still refuses a third level in a qualified name", () => {
+    expect(err(parseQualifiedName("A > B > C", "/pause"))).toMatch(/two levels/i);
+  });
+
+  it("renames with a parent qualifier", () => {
+    expect(ok(parseRename("Guitar > Scales > Arpeggios"))).toEqual({
+      parent: "Guitar",
+      from: "Scales",
+      to: "Arpeggios",
+    });
+  });
+
+  it("rejects a four-segment rename", () => {
+    expect(err(parseRename("A > B > C > D"))).toMatch(/\/rename/);
   });
 });
 

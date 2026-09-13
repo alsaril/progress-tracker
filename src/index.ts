@@ -38,7 +38,6 @@ type TgMessage = {
 };
 type Update = {
   message?: TgMessage;
-  edited_message?: TgMessage;
   callback_query?: {
     id?: string;
     from?: TgUser;
@@ -105,7 +104,13 @@ export default {
         const messageId = cq.message?.message_id;
         // Answer first so the client's spinner clears immediately, whatever the
         // handler goes on to do (design section 5.2).
-        if (cq.id) await tg.answerCallbackQuery(cq.id);
+        //
+        // Deliberately swallowed: this call is cosmetic, and it fails routinely
+        // for reasons that have nothing to do with the tap — "query is too old"
+        // after a Telegram retry, or a transient non-JSON 502. Letting it throw
+        // would abort the handler, so the button press would record nothing and
+        // say nothing.
+        if (cq.id) await tg.answerCallbackQuery(cq.id).catch(() => {});
         if (chatId === undefined || messageId === undefined || !cq.data) return accepted();
 
         const ctx: Ctx = { db: env.DB, tg, chatId, now: new Date(), chartImage };

@@ -34,16 +34,33 @@ const MONTHS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
+/**
+ * Widths are counted in code POINTS, not UTF-16 code units.
+ *
+ * An objective name containing an emoji or any astral character would otherwise
+ * be counted as two, misaligning the <pre> columns, and `truncate` could slice
+ * a surrogate pair in half and emit a lone half-character. Splitting with the
+ * spread operator iterates code points.
+ *
+ * This is still not true display width — a wide CJK glyph occupies two columns
+ * in a monospace font while counting as one code point — but it removes the
+ * class of bug that produces broken characters.
+ */
+const chars = (s: string): string[] => [...s];
+
 function pad(s: string, w: number): string {
-  return s.length >= w ? s.slice(0, w) : s + " ".repeat(w - s.length);
+  const c = chars(s);
+  return c.length >= w ? c.slice(0, w).join("") : s + " ".repeat(w - c.length);
 }
 
 function padLeft(s: string, w: number): string {
-  return s.length >= w ? s.slice(0, w) : " ".repeat(w - s.length) + s;
+  const c = chars(s);
+  return c.length >= w ? c.slice(0, w).join("") : " ".repeat(w - c.length) + s;
 }
 
 function truncate(s: string, w: number): string {
-  return s.length <= w ? s : `${s.slice(0, w - 1)}…`;
+  const c = chars(s);
+  return c.length <= w ? s : `${c.slice(0, w - 1).join("")}…`;
 }
 
 /** "7 Sep" */
@@ -272,9 +289,12 @@ export function formatTree(s: Snapshot): string {
         (flags.length > 0 ? `  <i>(${flags.join(", ")})</i>` : ""),
     );
 
+    // Same rule as the /log keyboard and every label: an objective is flat when
+    // its one PRACTICABLE child is the default. Counting paused children here
+    // instead meant an objective could be one-tap in /log yet printed with a
+    // child list in /tree.
+    if (isFlatObjective(s, o.id)) continue;
     const kids = childrenOf(s, o.id, false);
-    // A lone default child is the objective itself, so listing it twice is noise.
-    if (kids.length === 1 && kids[0]!.is_default === 1) continue;
     for (const k of kids) {
       const kt = s.totalBySub.get(k.id) ?? 0;
       const marks = [

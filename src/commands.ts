@@ -37,7 +37,7 @@ import {
   promptText,
   resolveCommand,
 } from "./keyboard.js";
-import { childrenOf, rankObjectives, recommend } from "./scoring.js";
+import { childrenOf, isFlatObjective, rankObjectives, recommend } from "./scoring.js";
 import { type InlineKeyboard, type Telegram, escapeHtml } from "./telegram.js";
 import { daysLeftInWeek } from "./week.js";
 
@@ -88,9 +88,10 @@ function logKeyboard(
   for (const o of snapshot.objectives.filter((x) => x.active === 1)) {
     const kids = childrenOf(snapshot, o.id);
     if (kids.length === 0) continue;
-    const onlyDefault = kids.length === 1 && kids[0]!.is_default === 1;
     rows.push([
-      onlyDefault
+      // One shared definition of "flat", so this keyboard and every label
+      // elsewhere can never disagree about the same objective.
+      isFlatObjective(snapshot, o.id)
         ? { text: o.name, callback_data: `rec:${kids[0]!.id}` }
         : { text: `${o.name} ›`, callback_data: `obj:${o.id}` },
     ]);
@@ -166,6 +167,22 @@ export async function showNext(ctx: Ctx, target: Target): Promise<void> {
 
 /** Record one point, then acknowledge with new totals and an Undo. */
 export async function record(ctx: Ctx, subId: number, target: Target): Promise<void> {
+  // Check the id still exists BEFORE inserting. Inline keyboards live as long as
+  // the chat scrollback, so a tap can arrive after its sub-objective was
+  // deleted — which would either violate the foreign key (the tap silently
+  // doing nothing) or leave an orphan row in the append-only log that no view
+  // would ever surface.
+  const before = await load(ctx.db, ctx.now);
+  if (!before.snapshot.subs.some((x) => x.id === subId)) {
+    await emit(
+      ctx,
+      target,
+      "That entry no longer exists — it was renamed away or deleted since this message was sent.",
+      [[{ text: "Log another…", callback_data: "log" }]],
+    );
+    return;
+  }
+
   const sessionId = await recordSession(ctx.db, subId, ctx.now);
   // Reload so the acknowledgement and the follow-on recommendation reflect the
   // point just written, rather than being computed by hand.
@@ -205,8 +222,13 @@ export async function undo(ctx: Ctx, sessionId: number | null, target: Target): 
   ]);
 }
 
-/** /stats: this week's balance, then the all-time picture. */
-export async function showStats(ctx: Ctx, target: Target): Promise<void> {
+/**
+ * /stats: this week's balance, then the all-time picture.
+ *
+ * Always sends rather than editing: it is two messages (plus an optional
+ * photo), so there is no single message to edit in place.
+ */
+export async function showStats(ctx: Ctx): Promise<void> {
   const { snapshot, config, bounds } = await load(ctx.db, ctx.now);
   const rec = recommend(snapshot);
   const daysLeft = daysLeftInWeek(
@@ -216,7 +238,7 @@ export async function showStats(ctx: Ctx, target: Target): Promise<void> {
     config.windowDays,
   );
 
-  await emit(ctx, target, formatBalance(snapshot, bounds, daysLeft, rec));
+  await ctx.tg.sendMessage(ctx.chatId, formatBalance(snapshot, bounds, daysLeft, rec));
   await ctx.tg.sendMessage(ctx.chatId, formatAllTime(snapshot));
 
   // The image is a bonus on top of the text, never a replacement: if it is
@@ -237,6 +259,7 @@ const HELP = [
   "/undo — remove the most recent session",
   "",
   "<b>Setting the tree up</b>",
+  "/manage — buttons for everything below",
   "/tree — the whole tree, with weights and shares",
   "<code>/add Guitar 3</code> — an objective, relative weight 3",
   "<code>/add Guitar &gt; Scales</code> — a sub-objective under it",
@@ -315,7 +338,7 @@ export async function handleCommand(ctx: Ctx, text: string): Promise<void> {
       await showNext(ctx, send);
       return;
     case "/stats":
-      await showStats(ctx, send);
+      await showStats(ctx);
       return;
     case "/undo":
       await undo(ctx, null, send);

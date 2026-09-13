@@ -36,9 +36,10 @@ import {
   findSubByName,
 } from "./scoring.js";
 import {
+  type QualifiedName,
   isError,
   parseAdd,
-  parseName,
+  parseQualifiedName,
   parseRename,
   parseWeight,
   weightForShare,
@@ -61,6 +62,44 @@ function resolve<T>(l: Lookup<T>, what: string, name: string): { value: T } | { 
   if (l.kind === "found") return { value: l.value };
   if (l.kind === "ambiguous") return { reply: ambiguous(l.names) };
   return { reply: notFound(what, name) };
+}
+
+/**
+ * Find whatever a (possibly qualified) name refers to.
+ *
+ * Unqualified, an objective wins over a sub-objective of the same name, and a
+ * child name shared by two parents reports as ambiguous — which the user
+ * resolves by qualifying it as `Parent > Child`. That qualified form is the
+ * whole point: without it, `ambiguous()` would advise something the bot could
+ * not accept, and both children would be permanently un-pausable.
+ */
+type Target =
+  | { kind: "objective"; objective: Objective }
+  | { kind: "sub"; sub: SubObjective }
+  | { reply: Reply };
+
+function resolveTarget(s: Snapshot, q: QualifiedName): Target {
+  if (q.parent !== undefined) {
+    const parent = resolve(findObjectiveByName(s, q.parent), "objective", q.parent);
+    if ("reply" in parent) return parent;
+    const sub = resolve(
+      findSubByName(s, q.name, parent.value.id),
+      `sub-objective under “${escapeHtml(parent.value.name)}”`,
+      q.name,
+    );
+    return "reply" in sub ? sub : { kind: "sub", sub: sub.value };
+  }
+
+  const asObjective = findObjectiveByName(s, q.name);
+  if (asObjective.kind === "found") {
+    return { kind: "objective", objective: asObjective.value };
+  }
+
+  const asSub = findSubByName(s, q.name);
+  if (asSub.kind === "found") return { kind: "sub", sub: asSub.value };
+  if (asSub.kind === "ambiguous") return { reply: ambiguous(asSub.names) };
+  if (asObjective.kind === "ambiguous") return { reply: ambiguous(asObjective.names) };
+  return { reply: notFound("objective or sub-objective", q.name) };
 }
 
 // ------------------------------------------------------------------------ /add
@@ -98,8 +137,11 @@ export async function handleAdd(db: D1Database, now: Date, args: string): Promis
     return `“${escapeHtml(parent.value.name)}” already has a “${escapeHtml(parsed.name)}”.`;
   }
 
-  const hadOnlyDefault =
-    childrenOf(snapshot, parent.value.id, false).length === 1;
+  // Only the auto-created default child carries the "kept its history" story.
+  // A lone child that is NOT the default (the default having been deleted once
+  // a sibling existed) must not be described that way.
+  const existing = childrenOf(snapshot, parent.value.id, false);
+  const hadOnlyDefault = existing.length === 1 && existing[0]!.is_default === 1;
   await createSubObjective(db, parent.value.id, parsed.name);
 
   const lines = [
@@ -165,25 +207,29 @@ export async function handleRename(db: D1Database, now: Date, args: string): Pro
   if (isError(parsed)) return parsed.error;
 
   const { snapshot } = await load(db, now);
+  const target = resolveTarget(snapshot, { parent: parsed.parent, name: parsed.from });
+  if ("reply" in target) return target.reply;
 
-  const asObjective = findObjectiveByName(snapshot, parsed.from);
-  if (asObjective.kind === "found") {
+  if (target.kind === "objective") {
     if (findObjectiveByName(snapshot, parsed.to).kind !== "none") {
       return `There is already an objective called “${escapeHtml(parsed.to)}”.`;
     }
-    await renameObjective(db, asObjective.value.id, parsed.to);
+    await renameObjective(db, target.objective.id, parsed.to);
     return `<b>${escapeHtml(parsed.from)}</b> → <b>${escapeHtml(parsed.to)}</b>.`;
   }
 
-  const asSub = findSubByName(snapshot, parsed.from);
-  if (asSub.kind === "ambiguous") return ambiguous(asSub.names);
-  if (asSub.kind === "found") {
-    await renameSubObjective(db, asSub.value.id, parsed.to);
-    return `<b>${escapeHtml(parsed.from)}</b> → <b>${escapeHtml(parsed.to)}</b>.`;
+  // Mirrors the check handleAdd already makes. Without it a rename could create
+  // two siblings with the same name — worse than an ambiguous lookup, because
+  // not even `Parent > Child` could then tell them apart.
+  const clash = findSubByName(snapshot, parsed.to, target.sub.objective_id);
+  if (clash.kind !== "none" && clash.kind === "found" && clash.value.id !== target.sub.id) {
+    const parentName =
+      snapshot.objectives.find((o) => o.id === target.sub.objective_id)?.name ?? "that objective";
+    return `“${escapeHtml(parentName)}” already has a “${escapeHtml(parsed.to)}”.`;
   }
 
-  if (asObjective.kind === "ambiguous") return ambiguous(asObjective.names);
-  return notFound("objective or sub-objective", parsed.from);
+  await renameSubObjective(db, target.sub.id, parsed.to);
+  return `<b>${escapeHtml(parsed.from)}</b> → <b>${escapeHtml(parsed.to)}</b>.`;
 }
 
 // -------------------------------------------------------- /pause and /resume
@@ -195,17 +241,18 @@ export async function handleSetActive(
   active: boolean,
 ): Promise<Reply> {
   const command = active ? "/resume" : "/pause";
-  const parsed = parseName(args, command);
+  const parsed = parseQualifiedName(args, command);
   if (isError(parsed)) return parsed.error;
 
   const { snapshot } = await load(db, now);
+  const target = resolveTarget(snapshot, parsed);
+  if ("reply" in target) return target.reply;
 
-  const asObjective = findObjectiveByName(snapshot, parsed);
-  if (asObjective.kind === "found") {
-    await setObjectiveActive(db, asObjective.value.id, active);
+  if (target.kind === "objective") {
+    await setObjectiveActive(db, target.objective.id, active);
     const after = await load(db, now);
     return [
-      `<b>${escapeHtml(asObjective.value.name)}</b> ${active ? "resumed" : "paused"}.` +
+      `<b>${escapeHtml(target.objective.name)}</b> ${active ? "resumed" : "paused"}.` +
         (active
           ? ""
           : " Its history is kept and the remaining weights renormalise around it."),
@@ -214,15 +261,8 @@ export async function handleSetActive(
     ].join("\n");
   }
 
-  const asSub = findSubByName(snapshot, parsed);
-  if (asSub.kind === "ambiguous") return ambiguous(asSub.names);
-  if (asSub.kind === "found") {
-    await setSubActive(db, asSub.value.id, active);
-    return `<b>${escapeHtml(asSub.value.name)}</b> ${active ? "resumed" : "paused"}. Its points still count toward its objective's share.`;
-  }
-
-  if (asObjective.kind === "ambiguous") return ambiguous(asObjective.names);
-  return notFound("objective or sub-objective", parsed);
+  await setSubActive(db, target.sub.id, active);
+  return `<b>${escapeHtml(target.sub.name)}</b> ${active ? "resumed" : "paused"}. Its points still count toward its objective's share.`;
 }
 
 // --------------------------------------------------------------------- /delete
@@ -233,14 +273,15 @@ export async function handleSetActive(
  * session log is the one thing that cannot be reconstructed.
  */
 export async function handleDelete(db: D1Database, now: Date, args: string): Promise<Reply> {
-  const parsed = parseName(args, "/delete");
+  const parsed = parseQualifiedName(args, "/delete");
   if (isError(parsed)) return parsed.error;
 
   const { snapshot } = await load(db, now);
+  const target = resolveTarget(snapshot, parsed);
+  if ("reply" in target) return target.reply;
 
-  const asObjective = findObjectiveByName(snapshot, parsed);
-  if (asObjective.kind === "found") {
-    const o: Objective = asObjective.value;
+  if (target.kind === "objective") {
+    const o: Objective = target.objective;
     const count = await sessionCountForObjective(db, o.id);
     if (count > 0) {
       return (
@@ -253,30 +294,23 @@ export async function handleDelete(db: D1Database, now: Date, args: string): Pro
     return `Deleted <b>${escapeHtml(o.name)}</b> and its children. Nothing had been recorded against it.`;
   }
 
-  const asSub = findSubByName(snapshot, parsed);
-  if (asSub.kind === "ambiguous") return ambiguous(asSub.names);
-  if (asSub.kind === "found") {
-    const sub: SubObjective = asSub.value;
-    const count = await sessionCountForSub(db, sub.id);
-    if (count > 0) {
-      return (
-        `<b>${escapeHtml(sub.name)}</b> has ${count} recorded ${count === 1 ? "session" : "sessions"}.\n\n` +
-        `<code>/pause ${escapeHtml(sub.name)}</code> keeps the record and stops it being offered.`
-      );
-    }
-    // An objective must always keep at least one child (section 2.2).
-    if (remainingChildren(snapshot, sub) === 0) {
-      return (
-        `That is the only entry under its objective, and an objective always ` +
-        `keeps at least one. Delete the objective instead, or add another child first.`
-      );
-    }
-    await deleteSubObjective(db, sub.id);
-    return `Deleted <b>${escapeHtml(sub.name)}</b>. Nothing had been recorded against it.`;
+  const sub: SubObjective = target.sub;
+  const count = await sessionCountForSub(db, sub.id);
+  if (count > 0) {
+    return (
+      `<b>${escapeHtml(sub.name)}</b> has ${count} recorded ${count === 1 ? "session" : "sessions"}.\n\n` +
+      `<code>/pause ${escapeHtml(sub.name)}</code> keeps the record and stops it being offered.`
+    );
   }
-
-  if (asObjective.kind === "ambiguous") return ambiguous(asObjective.names);
-  return notFound("objective or sub-objective", parsed);
+  // An objective must always keep at least one child (section 2.2).
+  if (remainingChildren(snapshot, sub) === 0) {
+    return (
+      `That is the only entry under its objective, and an objective always ` +
+      `keeps at least one. Delete the objective instead, or add another child first.`
+    );
+  }
+  await deleteSubObjective(db, sub.id);
+  return `Deleted <b>${escapeHtml(sub.name)}</b>. Nothing had been recorded against it.`;
 }
 
 function remainingChildren(s: Snapshot, sub: SubObjective): number {

@@ -88,6 +88,13 @@ export class Telegram {
   async #unwrap(method: string, res: Response): Promise<Record<string, unknown>> {
     const json = (await res.json()) as { ok?: boolean; description?: string; result?: unknown };
     if (!json.ok) {
+      // Editing a message to exactly what it already says is a no-op, not a
+      // failure. It happens whenever a button is double-tapped before the first
+      // edit lands, and treating it as an error would surface a scary log line
+      // for a user action that was already satisfied.
+      if ((json.description ?? "").includes("message is not modified")) {
+        return {};
+      }
       // Deliberately excludes the URL, which carries the token.
       throw new Error(`Telegram ${method} failed: ${json.description ?? res.status}`);
     }

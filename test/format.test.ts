@@ -3,6 +3,7 @@ import {
   formatAllTime,
   formatBalance,
   formatRecorded,
+  formatTree,
   formatWeekLabel,
   nextLabel,
 } from "../src/format.js";
@@ -235,5 +236,60 @@ describe("formatRecorded", () => {
     const out = formatRecorded(s, 10, BOUNDS);
     expect(out).toContain("Rock &amp; &lt;Roll&gt; → a&lt;b");
     expect(out).not.toContain("<Roll>");
+  });
+});
+
+describe("formatTree", () => {
+  it("uses the same flatness rule as the /log keyboard", () => {
+    // Theory's only real child is paused, so its one practicable child is the
+    // default one — it is a one-tap item in /log and must print flat here too.
+    // /tree previously counted paused children and itemised it regardless.
+    const s = exampleSnapshot({});
+    s.subs.find((x) => x.id === 31)!.active = 0; // Intervals
+    const out = formatTree(s);
+    expect(out).not.toMatch(/^ {4}Intervals/m);
+    expect(out).toContain("Theory");
+  });
+
+  it("itemises children while a real one is practicable", () => {
+    const out = formatTree(exampleSnapshot({}));
+    expect(out).toMatch(/^ {4}Intervals/m);
+  });
+
+  it("shows raw weight beside the derived share", () => {
+    const out = formatTree(exampleSnapshot({}));
+    expect(out).toContain("w=3");
+    expect(out).toContain("30%");
+  });
+
+  it("marks a zero-weight objective as never recommended", () => {
+    const s = exampleSnapshot({});
+    s.objectives[0]!.weight = 0;
+    expect(formatTree(s)).toContain("never recommended");
+  });
+});
+
+describe("column widths count code points, not UTF-16 units", () => {
+  it("keeps rows aligned when a name contains an emoji", () => {
+    const s = exampleSnapshot({ 10: 1 });
+    s.objectives[0]!.name = "Gui🎸tar";
+    const rows = formatBalance(s, BOUNDS, 4, null)
+      .replace(/<\/?pre>/g, "")
+      .split("\n")
+      .slice(3, 7);
+    // Compare in code points, which is what the padding now reasons about.
+    expect(new Set(rows.map((r) => [...r].length)).size).toBe(1);
+  });
+
+  it("never truncates through a surrogate pair", () => {
+    const s = exampleSnapshot({ 10: 1 });
+    // 11 astral glyphs: longer than the label column, so it must be truncated.
+    s.objectives[0]!.name = "🎸".repeat(11);
+    const out = formatBalance(s, BOUNDS, 4, null);
+    // A split pair leaves a lone surrogate; there must be none.
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(out)).toBe(
+      false,
+    );
+    expect(out).toContain("…");
   });
 });

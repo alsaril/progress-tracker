@@ -30,10 +30,26 @@ export function normaliseName(raw: string): string | ParseError {
   return name;
 }
 
+/**
+ * A plain decimal, optionally signed. Deliberately stricter than `Number()`,
+ * which accepts things nobody types as a weight and would silently mis-read:
+ * `Number("")` is 0 (so a stray "%" became "zero percent"), `Number("0x10")`
+ * is 16, and `Number(" ")` is 0.
+ */
+const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/;
+
+/** Does this token look like someone intending a weight? */
+export function looksLikeWeight(raw: string): boolean {
+  const text = raw.trim();
+  return DECIMAL.test(text.endsWith("%") ? text.slice(0, -1).trim() : text);
+}
+
 function parseWeightValue(raw: string): { weight: number; isPercent: boolean } | ParseError {
   const text = raw.trim();
   const isPercent = text.endsWith("%");
-  const n = Number(isPercent ? text.slice(0, -1).trim() : text);
+  const digits = isPercent ? text.slice(0, -1).trim() : text;
+  if (!DECIMAL.test(digits)) return { error: `“${text}” is not a number.` };
+  const n = Number(digits);
   if (!Number.isFinite(n)) return { error: `“${text}” is not a number.` };
   if (n < 0) return { error: "A weight cannot be negative." };
   if (isPercent && n >= 100) {
@@ -84,16 +100,27 @@ export function parseAdd(args: string): AddObjective | AddSub | ParseError {
     return { kind: "sub", parent, name };
   }
 
-  // A trailing token that parses as a number is the weight.
+  // A trailing token that looks like a weight IS the weight — and if it is
+  // malformed, say so rather than quietly folding it into the name. Otherwise
+  // `/add Guitar -1` creates an objective named "Guitar -1".
   const tokens = text.split(/\s+/);
   let weight = 1;
-  if (tokens.length > 1) {
+  if (tokens.length > 1 && looksLikeWeight(tokens[tokens.length - 1]!)) {
     const last = tokens[tokens.length - 1]!;
     const asWeight = parseWeightValue(last);
-    if (!isError(asWeight) && !asWeight.isPercent) {
-      weight = asWeight.weight;
-      tokens.pop();
+    if (isError(asWeight)) return asWeight;
+    if (asWeight.isPercent) {
+      return {
+        error: [
+          "A share needs something to take a share of, so it cannot be set while creating.",
+          "",
+          `<code>/add ${tokens.slice(0, -1).join(" ")}</code> first, then`,
+          `<code>/weight ${tokens.slice(0, -1).join(" ")} ${last}</code>.`,
+        ].join("\n"),
+      };
     }
+    weight = asWeight.weight;
+    tokens.pop();
   }
   const name = normaliseName(tokens.join(" "));
   if (isError(name)) return name;
@@ -127,34 +154,80 @@ export function parseWeight(args: string): SetWeight | ParseError {
 
 // --------------------------------------------------------------------- /rename
 
-export type Rename = { from: string; to: string };
+/** `parent` is set only by the three-segment form. */
+export type Rename = { parent?: string; from: string; to: string };
 
-/** `/rename Guitar > Classical guitar` */
+/**
+ * `/rename Guitar > Classical guitar`        — two segments: old > new
+ * `/rename Guitar > Scales > Arpeggios`      — three: parent > old > new
+ *
+ * The three-segment form disambiguates a child name shared by two parents; it
+ * is the counterpart of `Parent > Child` in `parseQualifiedName`.
+ */
 export function parseRename(args: string): Rename | ParseError {
   const text = args.trim();
-  if (!text.includes(">")) {
+  const parts = text.split(">");
+  if (!text.includes(">") || parts.length > 3) {
     return {
       error: [
         "<b>/rename</b> — rename an objective or sub-objective",
         "",
         "<code>/rename Guitar &gt; Classical guitar</code>",
+        "<code>/rename Guitar &gt; Scales &gt; Arpeggios</code> — when two parents share a child name",
       ].join("\n"),
     };
   }
-  const parts = text.split(">");
-  if (parts.length > 2) return { error: "Only one “>”, separating the old name from the new." };
-  const from = normaliseName(parts[0]!);
-  if (isError(from)) return from;
-  const to = normaliseName(parts[1]!);
-  if (isError(to)) return to;
-  return { from, to };
+
+  const names: string[] = [];
+  for (const raw of parts) {
+    const n = normaliseName(raw);
+    if (isError(n)) return n;
+    names.push(n);
+  }
+  return names.length === 3
+    ? { parent: names[0]!, from: names[1]!, to: names[2]! }
+    : { from: names[0]!, to: names[1]! };
 }
 
-/** A bare name argument, for /pause, /resume and /delete. */
-export function parseName(args: string, command: string): string | ParseError {
+/**
+ * A name argument for /pause, /resume and /delete, optionally qualified by its
+ * parent as `Parent > Child`.
+ *
+ * The qualified form exists because two objectives may each have a child of the
+ * same name. Without it, `ambiguous()` could tell the user to qualify the name
+ * while nothing in the bot accepted one — leaving both children permanently
+ * impossible to pause, rename or delete.
+ */
+export type QualifiedName = { parent?: string; name: string };
+
+export function parseQualifiedName(
+  args: string,
+  command: string,
+): QualifiedName | ParseError {
   const text = args.trim();
-  if (!text) return { error: `<code>${command} &lt;name&gt;</code>` };
-  return normaliseName(text);
+  if (!text) {
+    return {
+      error: [
+        `<code>${command} &lt;name&gt;</code>`,
+        `<code>${command} Parent &gt; Child</code> — when two parents share a child name`,
+      ].join("\n"),
+    };
+  }
+
+  if (!text.includes(">")) {
+    const name = normaliseName(text);
+    return isError(name) ? name : { name };
+  }
+
+  const parts = text.split(">");
+  if (parts.length > 2) {
+    return { error: "Only one “>” — the tree is two levels deep." };
+  }
+  const parent = normaliseName(parts[0]!);
+  if (isError(parent)) return parent;
+  const name = normaliseName(parts[1]!);
+  if (isError(name)) return name;
+  return { parent, name };
 }
 
 /**

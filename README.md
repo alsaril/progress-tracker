@@ -40,6 +40,7 @@ of your time it should get, relative to the others.
 | A sub-objective under it | ⚙️ Manage → ➕ Sub-objective | `/add Guitar > Scales` |
 | To change a weight | ⚙️ Manage → ⚖️ Weight | `/weight Guitar 4` |
 | To rename something | ⚙️ Manage → ✏️ Rename | `/rename Guitar > Classical guitar` |
+| To act on a child two parents share | — | `/pause Guitar > Scales` |
 | To set something aside | ⚙️ Manage → ⏸ Pause | `/pause Guitar` |
 | To bring it back | ⚙️ Manage → ▶️ Resume | `/resume Guitar` |
 | To remove a mistake | ⚙️ Manage → 🗑 Delete | `/delete Guitar` |

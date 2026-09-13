@@ -96,9 +96,13 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Rough advance width for the subset face at a given size. */
+/**
+ * Rough advance width for the subset face at a given size. Counts code points,
+ * so an emoji in a name is one character rather than two — the estimate is
+ * approximate either way, and it only ever decides whether a label fits.
+ */
 function textWidth(s: string, size: number): number {
-  return s.length * size * 0.55;
+  return [...s].length * size * 0.55;
 }
 
 function fmt(n: number): string {
