@@ -239,8 +239,17 @@ export function findSubByName(
   return { kind: "ambiguous", names: hits.map((x) => `${parent(x)} > ${x.name}`) };
 }
 
-/** True when the objective has never had a real child added (section 2.2). */
-export function hasOnlyDefaultChild(s: Snapshot, objectiveId: number): boolean {
-  const kids = s.subs.filter((x) => x.objective_id === objectiveId);
+/**
+ * True when the objective behaves as a single flat item: its one practicable
+ * child is the auto-created default (section 2.2).
+ *
+ * Counts ACTIVE children, which is deliberately the same rule the /log keyboard
+ * uses to decide between a one-tap button and a drill-down. The two must agree,
+ * because the recommendation is pinned at the top of that same keyboard — if
+ * they disagreed, the pinned row and the list row for one objective would be
+ * labelled differently.
+ */
+export function isFlatObjective(s: Snapshot, objectiveId: number): boolean {
+  const kids = childrenOf(s, objectiveId);
   return kids.length === 1 && kids[0]!.is_default === 1;
 }

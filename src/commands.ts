@@ -137,7 +137,7 @@ export async function showLog(ctx: Ctx, target: Target): Promise<void> {
 
   const keyboard = logKeyboard(
     snapshot,
-    rec ? { subId: rec.sub.id, label: nextLabel(rec) } : null,
+    rec ? { subId: rec.sub.id, label: nextLabel(snapshot, rec) } : null,
   );
   await emit(ctx, target, "What did you practice?", keyboard);
 }
@@ -158,8 +158,8 @@ export async function showNext(ctx: Ctx, target: Target): Promise<void> {
     ? `<i>furthest behind its share; next would be ${escapeHtml(runnerUp.name)}</i>`
     : "<i>the only active objective</i>";
 
-  await emit(ctx, target, `<b>${escapeHtml(nextLabel(rec))}</b>\n${because}`, [
-    [{ text: `✓ Record ${nextLabel(rec)}`, callback_data: `rec:${rec.sub.id}` }],
+  await emit(ctx, target, `<b>${escapeHtml(nextLabel(snapshot, rec))}</b>\n${because}`, [
+    [{ text: `✓ Record ${nextLabel(snapshot, rec)}`, callback_data: `rec:${rec.sub.id}` }],
     [{ text: "Something else…", callback_data: "log" }],
   ]);
 }
@@ -174,7 +174,7 @@ export async function record(ctx: Ctx, subId: number, target: Target): Promise<v
 
   const keyboard: InlineKeyboard = [[{ text: "↩ Undo", callback_data: `undo:${sessionId}` }]];
   if (rec) {
-    keyboard.push([{ text: `Next: ${nextLabel(rec)}`, callback_data: `rec:${rec.sub.id}` }]);
+    keyboard.push([{ text: `Next: ${nextLabel(snapshot, rec)}`, callback_data: `rec:${rec.sub.id}` }]);
   }
   keyboard.push([{ text: "Log another…", callback_data: "log" }]);
 

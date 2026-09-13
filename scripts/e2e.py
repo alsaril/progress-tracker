@@ -392,6 +392,54 @@ def main() -> int:
           "Added" not in out, out[:120])
     cmd(f"/delete {NEW}")
 
+    # ---- regression: labels after an objective stops being flat -----------
+    print("\ndefault child is named once it has siblings (reported bug):")
+    G = "ZzLabelCase"
+    cmd(f"/delete {G}")
+    cmd(f"/add {G} 500")           # huge weight so /next always picks it
+    out = cmd("/next")
+    check("while flat, the recommendation is just the objective name",
+          G in out and f"{G} →" not in out, out[:140])
+
+    cmd(f"/add {G} > One")
+    cmd(f"/add {G} > Two")
+    # Now three children: the default plus One and Two. Every /next for this
+    # objective must name which one, or the three read identically.
+    seen = set()
+    for _ in range(6):
+        out = cmd("/next")
+        m = re.search(rf"{G}[^<\n]*", re.sub(r"<[^>]+>", "", out))
+        if m:
+            seen.add(m.group(0).strip())
+        btn = None
+        made = list(calls)
+        for c in made:
+            for row in (c["body"].get("reply_markup") or {}).get("inline_keyboard", []):
+                for b in row:
+                    if b["callback_data"].startswith("rec:"):
+                        btn = b["callback_data"]
+        if btn:
+            tap(btn)
+    check("every recommendation now qualifies the child",
+          all("→" in s for s in seen), str(seen))
+    check("the three children are distinguishable from each other",
+          len(seen) >= 3, str(seen))
+
+    # Pausing the real children makes it a flat item again.
+    cmd(f"/pause One")
+    cmd(f"/pause Two")
+    out = cmd("/next")
+    check("collapses back to the bare name once siblings are paused",
+          G in out and f"{G} →" not in out, out[:140])
+
+    # clean up: undo the sessions we just recorded, then delete
+    for _ in range(8):
+        if not db(f"SELECT s.id FROM sessions s JOIN sub_objectives so ON so.id=s.sub_objective_id "
+                  f"JOIN objectives o ON o.id=so.objective_id WHERE o.name='{G}' LIMIT 1"):
+            break
+        cmd("/undo")
+    cmd(f"/delete {G}")
+
     print()
     if failures:
         print(f"{len(failures)} check(s) FAILED: {', '.join(failures)}")

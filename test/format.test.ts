@@ -162,20 +162,63 @@ describe("formatAllTime", () => {
 });
 
 describe("nextLabel", () => {
-  it("collapses a default child into its parent's name", () => {
+  it("collapses a flat objective into its own name", () => {
+    // Technique has only its auto-created default child.
     const s = exampleSnapshot({});
     const rec = { objective: s.objectives[0]!, sub: s.subs[0]! };
-    expect(nextLabel(rec)).toBe("Technique");
+    expect(nextLabel(s, rec)).toBe("Technique");
   });
 
   it("shows parent and child for a real sub-objective", () => {
     const s = exampleSnapshot({});
     const rec = { objective: s.objectives[2]!, sub: s.subs[3]! };
-    expect(nextLabel(rec)).toBe("Theory → Intervals");
+    expect(nextLabel(s, rec)).toBe("Theory → Intervals");
+  });
+
+  it("stops collapsing the default child once siblings are added", () => {
+    // The reported bug: an objective that was flat gains real children, and
+    // every entry under it still printed as just the parent's name — so three
+    // different things were indistinguishable in /next and in the keyboard.
+    const s = exampleSnapshot({});
+    const theoryDefault = s.subs[2]!; // named "Theory", is_default
+    const rec = { objective: s.objectives[2]!, sub: theoryDefault };
+    expect(theoryDefault.is_default).toBe(1);
+    expect(nextLabel(s, rec)).toBe("Theory → Theory");
+  });
+
+  it("collapses again if the siblings are paused away", () => {
+    // Back to one practicable child, so the flat form is correct once more —
+    // and this matches what the /log keyboard does with the same objective.
+    const s = exampleSnapshot({});
+    s.subs[3]!.active = 0; // Intervals
+    const rec = { objective: s.objectives[2]!, sub: s.subs[2]! };
+    expect(nextLabel(s, rec)).toBe("Theory");
+  });
+
+  it("distinguishes every child of a non-flat objective", () => {
+    const s = exampleSnapshot({});
+    const labels = s.subs
+      .filter((x) => x.objective_id === 3)
+      .map((sub) => nextLabel(s, { objective: s.objectives[2]!, sub }));
+    expect(new Set(labels).size).toBe(labels.length);
+    expect(labels).toEqual(["Theory → Theory", "Theory → Intervals"]);
   });
 });
 
 describe("formatRecorded", () => {
+  it("names the default child explicitly when it has siblings", () => {
+    // Same bug as nextLabel: the acknowledgement said only "Theory".
+    const s = exampleSnapshot({ 30: 1 });
+    expect(formatRecorded(s, 30, BOUNDS)).toContain("Theory → Theory");
+  });
+
+  it("uses the bare objective name for a flat objective", () => {
+    const s = exampleSnapshot({ 10: 1 });
+    const out = formatRecorded(s, 10, BOUNDS);
+    expect(out).toContain("Technique");
+    expect(out).not.toContain("→");
+  });
+
   it("acknowledges with this week's and the all-time total", () => {
     const s = exampleSnapshot({ 31: 2 });
     const out = formatRecorded(s, 31, BOUNDS);

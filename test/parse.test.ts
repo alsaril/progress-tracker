@@ -13,7 +13,7 @@ import {
   type Snapshot,
   findObjectiveByName,
   findSubByName,
-  hasOnlyDefaultChild,
+  isFlatObjective,
 } from "../src/scoring.js";
 
 const ok = <T>(x: T | { error: string }): T => {
@@ -230,14 +230,22 @@ describe("findSubByName", () => {
   });
 });
 
-describe("hasOnlyDefaultChild", () => {
+describe("isFlatObjective", () => {
   it("is false once a real child exists", () => {
-    expect(hasOnlyDefaultChild(snap(), 1)).toBe(false);
+    expect(isFlatObjective(snap(), 1)).toBe(false);
   });
 
   it("is true for a freshly created objective", () => {
     const s = snap();
     s.subs = s.subs.filter((x) => x.id === 10);
-    expect(hasOnlyDefaultChild(s, 1)).toBe(true);
+    expect(isFlatObjective(s, 1)).toBe(true);
+  });
+
+  it("counts only practicable children, matching the /log keyboard", () => {
+    // Pausing the real child leaves the default one alone, so the objective is
+    // a one-tap item again and must be labelled as one.
+    const s = snap();
+    s.subs.find((x) => x.id === 11)!.active = 0;
+    expect(isFlatObjective(s, 1)).toBe(true);
   });
 });

@@ -17,6 +17,7 @@ import {
   type Recommendation,
   type Snapshot,
   childrenOf,
+  isFlatObjective,
   shares,
   totalPointsForObjective,
 } from "./scoring.js";
@@ -130,7 +131,7 @@ export function formatBalance(
   }
 
   if (next) {
-    lines.push("", `Next: ${nextLabel(next)}`);
+    lines.push("", `Next: ${nextLabel(s, next)}`);
   }
 
   return `<pre>${escapeHtml(lines.join("\n"))}</pre>`;
@@ -186,11 +187,30 @@ export function formatAllTime(s: Snapshot): string {
   return `<pre>${escapeHtml(lines.join("\n"))}</pre>`;
 }
 
-/** "Theory → Intervals", collapsing the default child into its parent. */
-export function nextLabel(r: Recommendation): string {
-  return r.sub.is_default === 1
+/**
+ * "Theory → Intervals", or just "Theory" when the objective is a flat item.
+ *
+ * The collapse is conditional on the objective having no other practicable
+ * child — NOT merely on this being the default one. Once real sub-objectives
+ * exist, the default child is one entry among several (section 2.2), and
+ * printing only the parent's name would make three different entries read
+ * identically.
+ */
+export function nextLabel(s: Snapshot, r: Recommendation): string {
+  return isFlatObjective(s, r.objective.id)
     ? r.objective.name
     : `${r.objective.name} → ${r.sub.name}`;
+}
+
+/** The same rule, for any sub-objective rather than a recommendation. */
+export function subLabel(s: Snapshot, subId: number): string {
+  const sub = s.subs.find((x) => x.id === subId);
+  if (!sub) return "";
+  const objective = s.objectives.find((o) => o.id === sub.objective_id);
+  if (!objective) return sub.name;
+  return isFlatObjective(s, objective.id)
+    ? objective.name
+    : `${objective.name} → ${sub.name}`;
 }
 
 /** Acknowledgement after recording, with the new totals (design section 5.2). */
@@ -201,11 +221,7 @@ export function formatRecorded(
 ): string {
   const sub = s.subs.find((x) => x.id === subId);
   if (!sub) return "Recorded.";
-  const objective = s.objectives.find((o) => o.id === sub.objective_id);
-  const label =
-    sub.is_default === 1 || !objective
-      ? sub.name
-      : `${objective.name} → ${sub.name}`;
+  const label = subLabel(s, subId);
 
   const weekly = s.weeklyBySub.get(subId) ?? 0;
   const total = s.totalBySub.get(subId) ?? 0;
