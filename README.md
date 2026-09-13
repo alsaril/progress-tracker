@@ -169,6 +169,27 @@ whole Cloudflare account.
 the Worker (`wrangler secret put`) and persist across deploys, so CI never needs
 to see them.
 
+### If a remote D1 command fails with `code: 7403`
+
+```
+✘ [ERROR] A request to the Cloudflare API (.../d1/database/.../query) failed.
+  The given account is not valid or is not authorized to access this service [code: 7403]
+```
+
+This is an authorisation failure, not a bad query — and the usual cause is a
+`CLOUDFLARE_API_TOKEN` left exported in the shell (from setting the CI secret).
+**Wrangler prefers that environment variable over your `wrangler login` session**,
+so the command runs as the CI token, which is scoped to Workers and has no D1
+permission unless you added it.
+
+```bash
+echo "${CLOUDFLARE_API_TOKEN:+token is exported — this is the problem}"
+unset CLOUDFLARE_API_TOKEN     # or just open a new terminal
+```
+
+Deploys keep working throughout, which is what makes this confusing: deploying
+needs Workers permissions, and only D1 commands need the D1 ones.
+
 ### If `--file` fails against `--remote`
 
 `wrangler d1 execute --remote --file=...` uploads the file through a separate

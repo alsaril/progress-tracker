@@ -211,12 +211,30 @@ the log is empty, then delete the dummy objectives:
 /tree     ->  "No objectives yet."
 ```
 
-Or wipe it in one go and re-apply nothing (the schema and config survive):
+Or wipe it in one go (the schema and the `config` rows survive):
 
 ```bash
 npx wrangler d1 execute practice-tracker --remote \
-  --command "DELETE FROM sessions; DELETE FROM sub_objectives; DELETE FROM objectives;"
+  --command "DELETE FROM sessions; DELETE FROM sub_objectives; DELETE FROM objectives;
+             DELETE FROM sqlite_sequence WHERE name IN ('objectives','sub_objectives','sessions');"
 ```
+
+The `sqlite_sequence` line is optional; it just makes your real tree start at
+id 1 instead of continuing the dummies' numbering.
+
+**Back it up first** — the session log is the one thing nothing can rebuild:
+
+```bash
+mkdir -p ~/practice-tracker-backups
+for t in objectives sub_objectives sessions config; do
+  npx wrangler d1 execute practice-tracker --remote --json \
+    --command "SELECT * FROM $t" > ~/practice-tracker-backups/$t.json
+done
+```
+
+If that fails with `code: 7403`, see "If a remote D1 command fails" in
+README.md — it means `CLOUDFLARE_API_TOKEN` is exported in your shell and is
+shadowing your `wrangler login` session.
 
 Then build your real tree with `/add`.
 
