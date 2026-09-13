@@ -198,54 +198,14 @@ query at both sides of the boundary.
 
 ---
 
-## Cleaning up
+---
 
-`/undo` removes the most recent session each time, so send it repeatedly until
-the log is empty, then delete the dummy objectives:
+## Afterwards
 
-```
-/undo   (× however many you recorded)
-/delete Alpha
-/delete Beta
-/delete Gamma
-/tree     ->  "No objectives yet."
-```
+Clear the dummy data and build your real tree. `/undo` removes the most recent
+session each time, which is enough for a handful; to wipe everything at once,
+see [Clearing the database](IMPLEMENTATION.md#clearing-the-database).
 
-Or wipe it in one go (the schema and the `config` rows survive):
-
-```bash
-npx wrangler d1 execute practice-tracker --remote \
-  --command "DELETE FROM sessions; DELETE FROM sub_objectives; DELETE FROM objectives;
-             DELETE FROM sqlite_sequence WHERE name IN ('objectives','sub_objectives','sessions');"
-```
-
-The `sqlite_sequence` line is optional; it just makes your real tree start at
-id 1 instead of continuing the dummies' numbering.
-
-**Back it up first** — the session log is the one thing nothing can rebuild:
-
-```bash
-mkdir -p ~/practice-tracker-backups
-for t in objectives sub_objectives sessions config; do
-  npx wrangler d1 execute practice-tracker --remote --json \
-    --command "SELECT * FROM $t" > ~/practice-tracker-backups/$t.json
-done
-```
-
-If that fails with `code: 7403`, see "If a remote D1 command fails" in
-README.md — it means `CLOUDFLARE_API_TOKEN` is exported in your shell and is
-shadowing your `wrangler login` session.
-
-Then build your real tree with `/add`.
-
-## If something misbehaves
-
-```bash
-npx wrangler tail                 # live logs from the deployed Worker
-npx wrangler d1 execute practice-tracker --remote \
-  --command "SELECT * FROM sessions ORDER BY id DESC LIMIT 10"
-```
-
-`wrangler tail` is also how to confirm the CPU figures in README.md on a real
-invocation, if you ever move to a paid plan and want to switch the `/stats`
-image on.
+If anything misbehaved, [Inspecting a running
+bot](IMPLEMENTATION.md#inspecting-a-running-bot) has the live logs and database
+queries.

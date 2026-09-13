@@ -48,7 +48,7 @@ export type Ctx = {
   now: Date;
   /**
    * Whether to also send the section 6.2 PNG. Off on the free plan: the render
-   * costs ~20 ms CPU against a 10 ms per-invocation budget (see README.md).
+   * costs ~20 ms CPU against a 10 ms per-invocation budget (see IMPLEMENTATION.md).
    */
   chartImage: boolean;
 };

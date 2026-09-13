@@ -7,7 +7,7 @@ TIMEZONE = "Europe/Lisbon"
 # The all-time PNG (design section 6.2) is OFF by default because rasterising
 # it costs ~20 ms CPU and the free plan allows 10 ms per invocation. /stats
 # sends its text views either way. Set to "on" only on a paid plan, where the
-# default budget is 30 s. Measured figures are in README.md.
+# default budget is 30 s. Measured figures are in IMPLEMENTATION.md.
 CHART_IMAGE = "off"
 
 [[d1_databases]]
