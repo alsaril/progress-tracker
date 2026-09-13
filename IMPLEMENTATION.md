@@ -3,7 +3,9 @@
 How Practice Tracker is built, deployed and operated, and why it departs from
 its design document where it does. For what the bot *does*, see
 [README.md](README.md); for the original design, see
-[practice-tracker-design.md](practice-tracker-design.md).
+[practice-tracker-design.md](practice-tracker-design.md);
+for the habits and traps that shaped the code rather than the facts about it,
+see [CLAUDE.md](CLAUDE.md).
 
 It implements steps 1–5 of the design document's § 8 build order, plus step 6
 (tree editing from the bot). TypeScript on Cloudflare Workers with D1, deployed
